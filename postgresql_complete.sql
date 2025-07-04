@@ -8,6 +8,7 @@ CREATE EXTENSION IF NOT EXISTS "pg_stat_statements";
 
 -- 创建自定义类型
 CREATE TYPE game_status AS ENUM ('waiting', 'playing', 'finished', 'cancelled');
+CREATE TYPE participant_status AS ENUM ('active', 'inactive', 'left', 'disconnected', 'kicked');
 
 -- 玩家表
 CREATE TABLE players (
@@ -77,6 +78,7 @@ CREATE TABLE game_participants (
     initial_score INTEGER NOT NULL DEFAULT 0,
     final_score INTEGER,
     position SMALLINT, -- 玩家在游戏中的位置/座位号
+    status participant_status DEFAULT 'active', -- 参与者状态
     joined_at TIMESTAMPTZ DEFAULT NOW(),
     left_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -97,6 +99,7 @@ CREATE INDEX idx_transfer_records_transfer_time ON transfer_records(transfer_tim
 CREATE INDEX idx_transfer_records_status ON transfer_records(status);
 CREATE INDEX idx_game_participants_game_id ON game_participants(game_id);
 CREATE INDEX idx_game_participants_player_id ON game_participants(player_id);
+CREATE INDEX idx_game_participants_status ON game_participants(status);
 CREATE INDEX idx_games_start_time ON games(start_time);
 CREATE INDEX idx_games_end_time ON games(end_time);
 CREATE INDEX idx_games_status ON games(status);
@@ -105,6 +108,8 @@ CREATE INDEX idx_players_email ON players(email);
 
 -- 创建复合索引
 CREATE INDEX idx_game_participants_game_position ON game_participants(game_id, position);
+CREATE INDEX idx_game_participants_game_status ON game_participants(game_id, status);
+CREATE INDEX idx_game_participants_player_status ON game_participants(player_id, status);
 CREATE INDEX idx_score_transactions_player_time ON score_transactions(player_id, event_time);
 CREATE INDEX idx_transfer_records_game_time ON transfer_records(game_id, transfer_time);
 
@@ -124,17 +129,46 @@ ALTER TABLE games
 ALTER TABLE game_participants
     ADD CONSTRAINT valid_final_score CHECK (
         final_score IS NULL OR final_score >= 0
-    ),
-    ADD CONSTRAINT score_consistency_check CHECK (
-        final_score IS NULL OR (
-            final_score - initial_score = (
-                SELECT COALESCE(SUM(points_change), 0)
-                FROM score_transactions
-                WHERE player_id = game_participants.player_id
-                  AND game_id = game_participants.game_id
-            )
-        )
     );
+
+-- 创建游戏房间
+CREATE OR REPLACE FUNCTION create_game_room() RETURNS BIGINT AS $$
+DECLARE
+    p_id BIGINT;
+    current_user_id BIGINT;
+BEGIN
+    -- 从JWT token中获取用户ID
+    current_user_id := (current_setting('request.jwt.claims', true)::json->>'user_id')::BIGINT;
+    
+    -- 检查是否成功获取到用户ID
+    IF current_user_id IS NULL THEN
+        RAISE EXCEPTION 'User ID not found in JWT token';
+    END IF;
+
+    -- 检查玩家是否存在
+    IF NOT EXISTS (SELECT 1 FROM players WHERE player_id = current_user_id) THEN
+        RAISE EXCEPTION 'Player with ID % does not exist', current_user_id;
+    END IF;
+
+    -- 检查玩家是否已经参与游戏
+    IF EXISTS (SELECT 1 FROM game_participants WHERE player_id = current_user_id AND status = 'active') THEN
+        RAISE EXCEPTION 'Player % is already participating in a game', current_user_id;
+    END IF;
+
+    -- 创建游戏
+    INSERT INTO games ( game_type, status, max_players, min_players)
+    VALUES ('自定义', 'waiting', 30, 2)
+    RETURNING game_id INTO p_id;
+
+    -- 加入游戏
+    PERFORM join_game(p_id, current_user_id, 1);
+
+    RETURN p_id;
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE EXCEPTION 'Failed to create game: %', SQLERRM;
+END;
+$$ LANGUAGE plpgsql;
 
 -- 加入游戏函数
 CREATE OR REPLACE FUNCTION join_game(
@@ -147,6 +181,7 @@ DECLARE
     p_id BIGINT;
     game_status_val game_status;
     current_players INTEGER;
+    max_players_val INTEGER;
 BEGIN
     -- 检查游戏是否存在
     SELECT status INTO game_status_val
@@ -157,7 +192,8 @@ BEGIN
         RAISE EXCEPTION 'Game with ID % does not exist', p_game_id;
     END IF;
     
-    IF game_status_val != 'waiting' THEN
+    -- 检查游戏状态是否允许加入（明确列出不允许的状态）
+    IF game_status_val IN ('playing', 'finished', 'cancelled') THEN
         RAISE EXCEPTION 'Game % is not accepting new players (status: %)', p_game_id, game_status_val;
     END IF;
     
@@ -167,21 +203,21 @@ BEGIN
     END IF;
     
     -- 检查玩家是否已经参与该游戏
-    IF EXISTS (SELECT 1 FROM game_participants WHERE game_id = p_game_id AND player_id = p_player_id) THEN
+    IF EXISTS (SELECT 1 FROM game_participants WHERE game_id = p_game_id AND player_id = p_player_id AND status = 'active') THEN
         RAISE EXCEPTION 'Player % is already participating in game %', p_player_id, p_game_id;
     END IF;
     
-    -- 检查游戏是否已满
+    -- 检查游戏是否已满（只计算活跃状态的参与者）
     SELECT COUNT(*) INTO current_players
     FROM game_participants 
-    WHERE game_id = p_game_id;
+    WHERE game_id = p_game_id AND status = 'active';
     
-    SELECT max_players INTO game_status_val
+    SELECT max_players INTO max_players_val
     FROM games 
     WHERE game_id = p_game_id;
     
-    IF current_players >= game_status_val THEN
-        RAISE EXCEPTION 'Game % is full (max players: %)', p_game_id, game_status_val;
+    IF current_players >= max_players_val THEN
+        RAISE EXCEPTION 'Game % is full (max players: %)', p_game_id, max_players_val;
     END IF;
     
     -- 获取玩家当前积分
@@ -196,6 +232,8 @@ BEGIN
         VALUES (p_player_id, 0)
         RETURNING current_total INTO cur_score;
     END IF;
+
+    cur_score=0;
 
     -- 记录参与者
     INSERT INTO game_participants (game_id, player_id, initial_score, position)
@@ -282,6 +320,20 @@ BEGIN
     IF p_from_player_id = p_to_player_id THEN
         RAISE EXCEPTION 'Cannot transfer points to the same player';
     END IF;
+
+    -- 检查游戏是否存在
+    IF NOT EXISTS (SELECT 1 FROM games WHERE game_id = p_game_id AND status = 'playing') THEN
+        RAISE EXCEPTION 'Game with ID % is not playing', p_game_id;
+    END IF;
+
+    -- 玩家必须在一个激活的游戏中
+    IF NOT EXISTS (SELECT 1 FROM game_participants WHERE game_id = p_game_id AND player_id = p_from_player_id AND status = 'active') THEN
+        RAISE EXCEPTION 'Player % is not participating in an active game', p_from_player_id;
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM game_participants WHERE game_id = p_game_id AND player_id = p_to_player_id AND status = 'active') THEN
+        RAISE EXCEPTION 'Player % is not participating in an active game', p_to_player_id;
+    END IF;
     
     -- 检查玩家是否存在
     IF NOT EXISTS (SELECT 1 FROM players WHERE player_id = p_from_player_id) THEN
@@ -292,11 +344,11 @@ BEGIN
         RAISE EXCEPTION 'To player with ID % does not exist', p_to_player_id;
     END IF;
     
-    -- 检查转出玩家积分是否足够（移除负数限制）
-    SELECT current_total INTO from_player_total
-    FROM scores
-    WHERE player_id = p_from_player_id
-    FOR UPDATE;
+    -- -- 检查转出玩家积分是否足够（移除负数限制）
+    -- SELECT current_total INTO from_player_total
+    -- FROM scores
+    -- WHERE player_id = p_from_player_id
+    -- FOR UPDATE;
     
     IF NOT FOUND THEN
         -- 初始化转出玩家积分
@@ -323,6 +375,18 @@ BEGIN
         VALUES (p_to_player_id, 0)
         RETURNING current_total INTO to_player_total;
     END IF;
+
+    -- 更新转出玩家积分
+    UPDATE game_participants
+    SET initial_score = initial_score - p_points
+    WHERE game_id = p_game_id AND player_id = p_from_player_id
+    AND status = 'active';
+
+    -- 更新接收玩家积分
+    UPDATE game_participants
+    SET initial_score = initial_score + p_points
+    WHERE game_id = p_game_id AND player_id = p_to_player_id
+    AND status = 'active';
     
     -- 执行积分转移（使用事务确保一致性）
     -- 扣除转出玩家积分
@@ -450,10 +514,125 @@ BEGIN
         FROM game_participants 
         WHERE game_id = p_game_id
     );
+
+    -- 更新参与者状态
+    UPDATE game_participants
+    SET status = 'left',
+        left_at = NOW()
+    WHERE game_id = p_game_id;
     
 EXCEPTION
     WHEN OTHERS THEN
         RAISE EXCEPTION 'Failed to end game: %', SQLERRM;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 更新参与者状态函数
+CREATE OR REPLACE FUNCTION update_participant_status(
+    p_game_id BIGINT,
+    p_player_id BIGINT,
+    p_status participant_status,
+    p_description TEXT DEFAULT NULL
+) RETURNS BOOLEAN AS $$
+DECLARE
+    current_status participant_status;
+BEGIN
+    -- 检查参与者是否存在
+    SELECT status INTO current_status
+    FROM game_participants
+    WHERE game_id = p_game_id AND player_id = p_player_id;
+    
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Participant not found in game % for player %', p_game_id, p_player_id;
+    END IF;
+    
+    -- 如果状态相同，无需更新
+    IF current_status = p_status THEN
+        RETURN FALSE;
+    END IF;
+    
+    -- 更新参与者状态
+    UPDATE game_participants
+    SET status = p_status,
+        left_at = CASE WHEN p_status IN ('left', 'disconnected', 'kicked') THEN NOW() ELSE left_at END,
+        updated_at = NOW()
+    WHERE game_id = p_game_id AND player_id = p_player_id;
+    
+    RETURN TRUE;
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE EXCEPTION 'Failed to update participant status: %', SQLERRM;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 离开游戏函数
+CREATE OR REPLACE FUNCTION leave_game(
+    p_game_id BIGINT,
+    p_player_id BIGINT
+) RETURNS BOOLEAN AS $$
+BEGIN
+    RETURN update_participant_status(p_game_id, p_player_id, 'left', 'Player left the game');
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE EXCEPTION 'Failed to leave game: %', SQLERRM;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 踢出玩家函数
+CREATE OR REPLACE FUNCTION kick_player(
+    p_game_id BIGINT,
+    p_player_id BIGINT,
+    p_reason TEXT DEFAULT NULL
+) RETURNS BOOLEAN AS $$
+BEGIN
+    RETURN update_participant_status(p_game_id, p_player_id, 'kicked', COALESCE(p_reason, 'Player was kicked from the game'));
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE EXCEPTION 'Failed to kick player: %', SQLERRM;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 重新加入游戏函数
+CREATE OR REPLACE FUNCTION rejoin_game(
+    p_game_id BIGINT,
+    p_player_id BIGINT
+) RETURNS BOOLEAN AS $$
+DECLARE
+    game_status_val game_status;
+    current_players INTEGER;
+    max_players_val INTEGER;
+BEGIN
+    -- 检查游戏状态
+    SELECT status INTO game_status_val
+    FROM games 
+    WHERE game_id = p_game_id;
+    
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Game with ID % does not exist', p_game_id;
+    END IF;
+    
+    IF game_status_val IN ('finished', 'cancelled') THEN
+        RAISE EXCEPTION 'Game % is not accepting players (status: %)', p_game_id, game_status_val;
+    END IF;
+    
+    -- 检查游戏是否已满（只计算活跃状态的参与者）
+    SELECT COUNT(*) INTO current_players
+    FROM game_participants 
+    WHERE game_id = p_game_id AND status = 'active';
+    
+    SELECT max_players INTO max_players_val
+    FROM games 
+    WHERE game_id = p_game_id;
+    
+    IF current_players >= max_players_val THEN
+        RAISE EXCEPTION 'Game % is full (max players: %)', p_game_id, max_players_val;
+    END IF;
+    
+    -- 更新参与者状态为活跃
+    RETURN update_participant_status(p_game_id, p_player_id, 'active', 'Player rejoined the game');
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE EXCEPTION 'Failed to rejoin game: %', SQLERRM;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -651,4 +830,7 @@ COMMENT ON COLUMN score_transactions.transaction_type IS '交易类型：game-�
 COMMENT ON COLUMN score_transactions.related_player_id IS '关联的另一个玩家ID（用于积分转移）';
 COMMENT ON COLUMN scores.current_total IS '玩家当前积分（允许负数）';
 COMMENT ON COLUMN transfer_records.game_id IS '游戏ID（房间ID），用于向特定游戏房间广播转移信息';
-COMMENT ON COLUMN transfer_records.status IS '转移状态：pending-待处理，completed-已完成，failed-失败，cancelled-已取消'; 
+COMMENT ON COLUMN transfer_records.status IS '转移状态：pending-待处理，completed-已完成，failed-失败，cancelled-已取消';
+COMMENT ON COLUMN game_participants.status IS '参与者状态：active-活跃，inactive-非活跃，left-已离开，disconnected-断开连接，kicked-被踢出';
+COMMENT ON COLUMN game_participants.position IS '玩家在游戏中的位置/座位号';
+COMMENT ON COLUMN game_participants.left_at IS '玩家离开时间（当状态为left/disconnected/kicked时设置）'; 
