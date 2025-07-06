@@ -5,26 +5,57 @@ class GameServices {
         this.pool = dbService.pool;
     }
 
+    generateJapaneseMahjongName() {
+        // 常见日麻役种
+        const yakuNames = [
+          '立直', '一发', '门前清自摸和', '平和', '断幺九', 
+          '一盃口', '三色同顺', '一气通贯', '混全带幺九', 
+          '七对子', '混老头', '三色同刻', '三暗刻', '小三元',
+          '混一色', '清一色', '国士无双', '大三元', '四暗刻',
+          '字一色', '绿一色', '清老头', '九莲宝灯', '天和', '地和'
+        ];
+        
+        // 50%概率添加前缀
+        const prefixes = ['雀', '牌', '和', '打', '役'];
+        const usePrefix = Math.random() > 0.5;
+        
+        const yaku = yakuNames[Math.floor(Math.random() * yakuNames.length)];
+        const prefix = usePrefix ? prefixes[Math.floor(Math.random() * prefixes.length)] : '';
+        
+        return prefix + yaku;
+      }
+
     // 微信登录处理
     async loginWithWechat(openid, nickname = '') {
         const client = await this.pool.connect();
         try {
             await client.query('BEGIN');
 
+            if (nickname === '') {
+                nickname = this.generateJapaneseMahjongName();
+            }
+
             console.log(openid, nickname);
             // 查找或创建用户
             await client.query(`
         INSERT INTO players (player_id, username)
         VALUES ($1, $2)
-        ON CONFLICT (player_id) DO UPDATE SET username = EXCLUDED.username
+        ON CONFLICT (player_id) DO UPDATE SET username = EXCLUDED.username, updated_at = NOW()
       `, [openid, nickname]);
+      await client.query(`
+        INSERT INTO scores (player_id, current_total, games_played, games_won, games_lost)
+        VALUES ($1, 0, 0, 0, 0)
+        ON CONFLICT (player_id)  DO NOTHING
+      `, [openid]);
+
 
             await client.query('COMMIT');
 
-            const user_id = openid;
+            const userId = openid;
             return {
                 role: 'authenticated_user',
-                user_id: user_id.toString(),
+                userId: userId.toString(),
+                username: nickname,
                 openid: openid
             };
         } catch (error) {
@@ -33,6 +64,38 @@ class GameServices {
         } finally {
             client.release();
         }
+    }
+
+    async updatePlayer(userId, username, phone, email, avatarUrl) {
+        const client = await this.pool.connect();
+        try {
+            await client.query('BEGIN');
+            // 为空则不更新
+            if (username === '') {
+                username = null;
+            }
+            if (phone === '') {
+                phone = null;
+            }
+            if (email === '') {
+                email = null;
+            }
+            if (avatarUrl === '') {
+                avatarUrl = null;
+            }
+
+            await client.query(`
+                UPDATE players SET username = $1, phone = $2, email = $3, avatar_url = $4, updated_at = NOW() WHERE player_id = $5
+            `, [username, phone, email, avatarUrl, userId]);
+
+            await client.query('COMMIT');
+        } catch (error) {
+            await client.query('ROLLBACK');
+            throw error;
+        } finally {
+            client.release();
+        }
+        
     }
 
     // 创建游戏房间
@@ -367,6 +430,21 @@ class GameServices {
             updated_at = NOW()
         WHERE player_id = $2 and game_id = $3
       `, [toNewFinalScore, toPlayerId, gameId]);
+
+      // 
+        await client.query(`
+        UPDATE scores
+        SET current_total = current_total - $1,
+            last_updated = NOW()
+        WHERE player_id = $2
+      `, [points, fromPlayerId]);
+
+        await client.query(`
+        UPDATE scores
+        SET current_total = current_total + $1,
+            last_updated = NOW()
+        WHERE player_id = $2
+      `, [points, toPlayerId]);
     }
 
     // 结束游戏
@@ -389,6 +467,26 @@ class GameServices {
 
             if (game.status === 'finished') {
                 throw new Error(`Game ${gameId} is already finished`);
+            }
+            // 记录胜负， 查询所有参与者， 如果final_score > 0， 则玩家胜利， 否则失败
+            const participants = await client.query(
+                'SELECT player_id, final_score FROM game_participants WHERE game_id = $1',
+                [gameId]
+            );
+            for (const participant of participants.rows) {
+                if (participant.final_score > 0) {
+                    await client.query(`
+                        UPDATE scores
+                        SET games_won = games_won + 1
+                        WHERE player_id = $1
+                    `, [participant.player_id]);
+                } else if (participant.final_score < 0) {
+                    await client.query(`
+                        UPDATE scores
+                        SET games_lost = games_lost + 1
+                        WHERE player_id = $1
+                    `, [participant.player_id]);
+                }
             }
 
             // 更新游戏状态

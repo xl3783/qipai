@@ -1,4 +1,14 @@
 -- auto-generated definition
+create role anonymous;
+
+-- auto-generated definition
+create role authenticated;
+
+-- auto-generated definition
+create role authenticated_user;
+
+
+-- auto-generated definition
 create type game_status as enum ('waiting', 'playing', 'finished', 'cancelled');
 
 alter type game_status owner to postgres;
@@ -19,17 +29,17 @@ create type jwt_token as
 alter type jwt_token owner to postgres;
 
 
-
 -- auto-generated definition
 create table players
 (
     player_id  text         not null
         primary key,
     username   varchar(100) not null,
+    phone      text,
     email      varchar(255),
     avatar_url text,
     created_at timestamp with time zone default now(),
-    updated_at timestamp with time zone default now()
+    updated_at timestamp with time zone default now()    
 );
 
 comment on table players is '玩家信息表';
@@ -42,10 +52,11 @@ alter table players
 grant delete, insert, select, update on players to authenticated_user;
 
 
+
 -- auto-generated definition
 create table games
 (
-    game_id     text                     default nextval('games_game_id_seq'::regclass) not null
+    game_id     text       default gen_random_uuid()               not null
         primary key,
     game_type   varchar(50)                                                             not null,
     status      game_status              default 'waiting'::game_status,
@@ -82,7 +93,7 @@ grant delete, insert, select, update on games to authenticated_user;
 -- auto-generated definition
 create table game_participants
 (
-    participation_id text                     default nextval('game_participants_participation_id_seq'::regclass) not null
+    participation_id text        default gen_random_uuid()              not null
         primary key,
     game_id          text                                                                                         not null,
     player_id        text                                                                                         not null,
@@ -155,3 +166,57 @@ create index idx_transfer_records_game_time
 
 grant delete, insert, select, update on transfer_records to authenticated_user;
 
+
+-- auto-generated definition
+create table scores
+(
+    player_id     text                               not null
+        primary key,
+    current_total integer                  default 0 not null,
+    games_played  integer                  default 0,
+    games_won     integer                  default 0,
+    last_updated  timestamp with time zone default now(),
+    games_lost    integer                  default 0
+);
+
+comment on table scores is '玩家当前积分表（允许负数）';
+
+comment on column scores.current_total is '玩家当前积分（允许负数）';
+
+alter table scores
+    owner to postgres;
+
+grant delete, insert, select, update on scores to authenticated_user;
+
+
+
+
+-- 2. 创建触发器函数
+CREATE OR REPLACE FUNCTION update_modified_column()
+RETURNS TRIGGER AS $$
+BEGIN
+   NEW.updated_at = NOW();
+   RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+
+CREATE TRIGGER update_players_modtime
+BEFORE UPDATE ON players
+FOR EACH ROW EXECUTE FUNCTION update_modified_column();
+
+CREATE TRIGGER update_scores_modtime
+BEFORE UPDATE ON scores
+FOR EACH ROW EXECUTE FUNCTION update_modified_column();
+
+CREATE TRIGGER update_games_modtime
+BEFORE UPDATE ON games
+FOR EACH ROW EXECUTE FUNCTION update_modified_column();
+
+CREATE TRIGGER update_game_participants_modtime
+BEFORE UPDATE ON game_participants
+FOR EACH ROW EXECUTE FUNCTION update_modified_column();
+
+CREATE TRIGGER update_transfer_records_modtime
+BEFORE UPDATE ON transfer_records
+FOR EACH ROW EXECUTE FUNCTION update_modified_column();
