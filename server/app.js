@@ -174,7 +174,7 @@ app.post('/api/wechat-login', async (req, res) => {
     
     // 2. 解密用户数据（如果需要）
     let userInfo = {
-        nickName: 'mock_nickname'
+        nickName: ''
     };
     if (encryptedData && iv) {
       userInfo = decryptData(encryptedData, iv, session_key);
@@ -187,11 +187,11 @@ app.post('/api/wechat-login', async (req, res) => {
       return res.status(500).json({ error: '用户登录失败' });
     }
     
-    const { role, user_id } = loginResult;
+    const { role, userId, username } = loginResult;
     
     // 4. 生成JWT令牌
     const token = jwt.sign(
-      { aud: "postgraphile", role, user_id, openid },
+      { aud: "postgraphile", role, userId, openid },
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
@@ -199,9 +199,9 @@ app.post('/api/wechat-login', async (req, res) => {
     res.json({ 
       token,
       user: {
-        id: user_id,
+        id: userId,
         role: role,
-        nickname: userInfo?.nickName || ''
+        nickname: username
       }
     });
   } catch (error) {
@@ -213,14 +213,14 @@ app.post('/api/wechat-login', async (req, res) => {
 // 玩家相关API
 app.get('/api/players/profile', authenticateToken, async (req, res) => {
   try {
-    const { user_id } = req.user;
+    const { userId } = req.user;
     
     const result = await dbService.query(`
       SELECT p.player_id, p.username, p.created_at, s.current_total as score
       FROM players p
       LEFT JOIN scores s ON p.player_id = s.player_id
       WHERE p.player_id = $1
-    `, [user_id]);
+    `, [userId]);
     
     if (result.rows.length === 0) {
       return res.status(404).json({ error: '玩家不存在' });
@@ -237,7 +237,7 @@ app.get('/api/players/profile', authenticateToken, async (req, res) => {
 app.post('/api/games', authenticateToken, async (req, res) => {
   try {
     const { game_type, participants } = req.body;
-    const { user_id } = req.user;
+    const { userId } = req.user;
     
     if (!game_type) {
       return res.status(400).json({ error: '游戏类型不能为空' });
@@ -250,7 +250,7 @@ app.post('/api/games', authenticateToken, async (req, res) => {
         INSERT INTO games (game_type, start_time, created_by)
         VALUES ($1, NOW(), $2)
         RETURNING game_id
-      `, [game_type, user_id]);
+      `, [game_type, userId]);
       
       const gameId = gameResult.rows[0].game_id;
       
@@ -278,13 +278,13 @@ app.post('/api/games', authenticateToken, async (req, res) => {
   }
 });
 
-// 创建游戏房间API（使用JWT token中的user_id）
+// 创建游戏房间API（使用JWT token中的userId）
 app.post('/api/games/create', authenticateToken, async (req, res) => {
   try {
-    const { user_id } = req.user;
+    const { userId } = req.user;
     
     // 调用游戏服务创建游戏房间
-    const gameId = await gameServices.createGameRoom(user_id);
+    const gameId = await gameServices.createGameRoom(userId);
     
     res.json({ 
       game_id: gameId,
@@ -317,14 +317,14 @@ app.get('/api/games/:gameId', authenticateToken, async (req, res) => {
 app.post('/api/scores/transaction', authenticateToken, async (req, res) => {
   try {
     const { player_id, points_change, game_id, description } = req.body;
-    const { user_id } = req.user;
+    const { userId } = req.user;
     
     if (!player_id || points_change === undefined) {
       return res.status(400).json({ error: '缺少必要参数' });
     }
     
     // 验证权限（只能修改自己的积分或管理员）
-    if (user_id !== player_id && req.user.role !== 'admin') {
+    if (userId !== player_id && req.user.role !== 'admin') {
       return res.status(403).json({ error: '权限不足' });
     }
     
@@ -373,12 +373,12 @@ app.get('/api/leaderboard', async (req, res) => {
 app.post('/api/games/join', authenticateToken, async (req, res) => {
   try {
     const { gameId } = req.body;
-    const { user_id } = req.user;
+    const { userId } = req.user;
     const { position } = req.body;
 
-    console.log(gameId, user_id, position);
+    console.log(gameId, userId, position);
     
-    const participationId = await gameServices.joinGame(gameId, user_id, position);
+    const participationId = await gameServices.joinGame(gameId, userId, position);
     
     res.json({
       success: true,
@@ -394,9 +394,9 @@ app.post('/api/games/join', authenticateToken, async (req, res) => {
 app.post('/api/games/leave', authenticateToken, async (req, res) => {
   try {
     const { gameId } = req.body;
-    const { user_id } = req.user;
+    const { userId } = req.user;
     
-    const result = await gameServices.leaveGame(gameId, user_id);
+    const result = await gameServices.leaveGame(gameId, userId);
     
     res.json({
       success: true,
@@ -408,11 +408,27 @@ app.post('/api/games/leave', authenticateToken, async (req, res) => {
   }
 });
 
+app.post('/api/players/update', authenticateToken, async (req, res) => {
+  try {
+    const { userId } = req.user;
+    const { username, phone, email, avatarUrl } = req.body;
+
+    const result = await gameServices.updatePlayer(userId, username, phone, email, avatarUrl);
+
+    res.json({
+      success: true,
+    })
+  } catch (error) {
+    console.error('更新玩家信息错误:', error);
+    res.status(500).json({ error: '更新玩家信息失败: ' + error.message });
+  }
+})
+
 app.post('/api/games/end', authenticateToken, async (req, res) => {
   try {
     const { gameId } = req.body;
     // const { gameId } = req.params;
-    const { user_id } = req.user;
+    const { userId } = req.user;
     
     // 检查权限（只有游戏创建者或管理员可以结束游戏）
     const gameInfo = await gameServices.getGameInfo(gameId);
@@ -420,7 +436,7 @@ app.post('/api/games/end', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: '游戏不存在' });
     }
     
-    // if (gameInfo.created_by !== user_id && req.user.role !== 'admin') {
+    // if (gameInfo.created_by !== userId && req.user.role !== 'admin') {
     //   return res.status(403).json({ error: '权限不足' });
     // }
     
@@ -439,12 +455,12 @@ app.post('/api/games/end', authenticateToken, async (req, res) => {
 app.post('/api/games/transfer', authenticateToken, async (req, res) => {
   try {
     const { gameId, to, points, description } = req.body;
-    const { user_id } = req.user;
+    const { userId } = req.user;
 
-    let from = user_id;
+    let from = userId;
     
     // // 验证权限（只能转移自己的积分或管理员）
-    // if (from !== user_id && req.user.role !== 'admin') {
+    // if (from !== userId && req.user.role !== 'admin') {
     //   return res.status(403).json({ error: '权限不足' });
     // }
     
@@ -471,7 +487,7 @@ app.post('/api/games/:gameId/kick', authenticateToken, async (req, res) => {
   try {
     const { gameId } = req.params;
     const { player_id, reason } = req.body;
-    const { user_id } = req.user;
+    const { userId } = req.user;
     
     // 检查权限（只有游戏创建者或管理员可以踢出玩家）
     const gameInfo = await gameServices.getGameInfo(gameId);
@@ -479,7 +495,7 @@ app.post('/api/games/:gameId/kick', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: '游戏不存在' });
     }
     
-    if (gameInfo.created_by !== user_id && req.user.role !== 'admin') {
+    if (gameInfo.created_by !== userId && req.user.role !== 'admin') {
       return res.status(403).json({ error: '权限不足' });
     }
     
