@@ -149,8 +149,8 @@ app.post('/api/wechat-login', async (req, res) => {
     // mock data
     const wechatRes = {
       data: {
-        openid: randomUUID(),
-        session_key: randomUUID()
+        openid: code,
+        session_key: code
       }
     };
     console.log(wechatRes);
@@ -216,7 +216,7 @@ app.get('/api/players/profile', authenticateToken, async (req, res) => {
     const { userId } = req.user;
     
     const result = await dbService.query(`
-      SELECT p.player_id, p.username, p.created_at, s.current_total as score
+      SELECT p.player_id playerId, p.username, p.avatar_url avatarUrl, s.current_total as score
       FROM players p
       LEFT JOIN scores s ON p.player_id = s.player_id
       WHERE p.player_id = $1
