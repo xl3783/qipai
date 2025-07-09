@@ -1,0 +1,11 @@
+{
+    "recommendations": [
+        "mtxr.sqltools",
+        "mtxr.sqltools-driver-pg",
+        "bradymholt.pgformatter",
+        "ms-mssql.mssql",
+        "cweijan.vscode-mysql-client2",
+        "redhat.vscode-yaml",
+        "ms-vscode.vscode-json"
+    ]
+} 
