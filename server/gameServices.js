@@ -1,3 +1,62 @@
+function snakeToCamel(str) {
+    return str.replace(/_([a-z])/g, (_, group) => group.toUpperCase());
+  }
+  
+  function convertKeysToCamelCase(obj) {
+    if (Array.isArray(obj)) {
+      return obj.map(convertKeysToCamelCase); // 处理数组
+    } else if (typeof obj === 'object' && obj !== null) {
+      const newObj = {};
+      for (const key in obj) {
+        const camelKey = snakeToCamel(key);
+        const value = obj[key];
+        
+        // 检查是否为日期时间字段
+        if (isDateField(key) && value) {
+          newObj[camelKey] = convertToTimestamp(value);
+        } else {
+          newObj[camelKey] = convertKeysToCamelCase(value); // 递归处理嵌套对象
+        }
+      }
+      return newObj;
+    }
+    return obj; // 基本类型直接返回
+  }
+
+  // 判断是否为日期时间字段
+  function isDateField(key) {
+    const dateFields = ['created_at', 'updated_at', 'start_time', 'end_time', 'left_at', 'event_time'];
+    return dateFields.includes(key);
+  }
+
+  // 将日期时间转换为时间戳字符串
+  function convertToTimestamp(value) {
+    if (!value) return null;
+    
+    // 如果已经是字符串，直接返回
+    if (typeof value === 'string') {
+      return value;
+    }
+    
+    // 如果是 Date 对象，转换为时间戳字符串
+    if (value instanceof Date) {
+      return value.getTime().toString();
+    }
+    
+    // 如果是其他类型，尝试转换为 Date 对象
+    try {
+      const date = new Date(value);
+      if (!isNaN(date.getTime())) {
+        return date.getTime().toString();
+      }
+    } catch (error) {
+      console.warn('Failed to convert value to timestamp:', value);
+    }
+    
+    return value;
+  }
+  
+
 
 class GameServices {
     constructor(dbService) {
@@ -691,7 +750,7 @@ class GameServices {
       GROUP BY g.game_id
     `, [gameId]);
 
-        return result.rows[0];
+        return convertKeysToCamelCase(result.rows[0]);
     }
 
     // 获取玩家积分历史
@@ -705,7 +764,7 @@ class GameServices {
       LIMIT $2
     `, [playerId, limit]);
 
-        return result.rows;
+        return convertKeysToCamelCase(result.rows);
     }
 
     // 获取排行榜
@@ -719,8 +778,43 @@ class GameServices {
       LIMIT $1
     `, [limit]);
 
-        return result.rows;
+        return result.rows; 
+    }
+
+    async getGames(userId) {
+        const client = await this.pool.connect();
+        // 从game_participants 中获取所有游戏id， 然后查询games表， 获取游戏信息
+        // 嵌套列表， 每个游戏包含一个参与者列表， 参与者列表包含玩家信息
+        try {
+            const result = await client.query(`
+                SELECT g.game_id,
+       g.game_name,
+       g.status,
+       g.created_at,
+       g.updated_at,
+       g.hosted as host_id,
+       h.username as host_name,
+       (SELECT json_agg(json_build_object(
+               'player_id', p.player_id,
+               'username', p.username,
+               'final_score', gp2.final_score,
+               'position', gp2.position
+                        )) FROM game_participants gp2
+                           join players p on gp2.player_id = p.player_id
+        WHERE gp2.game_id = g.game_id) as participants
+FROM games g
+         left JOIN players h ON g.hosted = h.player_id
+WHERE g.game_id IN (
+    SELECT game_id FROM game_participants WHERE player_id = $1
+)
+ORDER BY g.created_at DESC
+            `, [userId]);
+            // 将时间类型转换为时间戳
+            return convertKeysToCamelCase(result.rows);
+        } finally {
+            client.release();
+        }
     }
 }
 
-module.exports = GameServices; 
+module.exports = { GameServices, convertKeysToCamelCase }; 

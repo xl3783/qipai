@@ -6,7 +6,7 @@ const rateLimit = require('express-rate-limit');
 const jwt = require('jsonwebtoken');
 const axios = require('axios');
 const { Pool } = require('pg');
-const GameServices = require('./gameServices');
+const { GameServices, convertKeysToCamelCase } = require('./gameServices');
 require('dotenv').config();
 
 // 创建Express应用
@@ -226,7 +226,9 @@ app.get('/api/players/profile', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: '玩家不存在' });
     }
     
-    res.json(result.rows[0]);
+    // 使用 convertKeysToCamelCase 处理时间转换
+    const processedResult = convertKeysToCamelCase(result.rows[0]);
+    res.json(processedResult);
   } catch (error) {
     console.error('获取玩家信息错误:', error);
     res.status(500).json({ error: '获取玩家信息失败' });
@@ -297,22 +299,22 @@ app.post('/api/games/create', authenticateToken, async (req, res) => {
   }
 });
 
-app.get('/api/games/:gameId', authenticateToken, async (req, res) => {
-  try {
-    const { gameId } = req.params;
+// app.get('/api/games/:gameId', authenticateToken, async (req, res) => {
+//   try {
+//     const { gameId } = req.params;
     
-    const gameInfo = await gameServices.getGameInfo(gameId);
+//     const gameInfo = await gameServices.getGameInfo(gameId);
     
-    if (!gameInfo) {
-      return res.status(404).json({ error: '游戏不存在' });
-    }
+//     if (!gameInfo) {
+//       return res.status(404).json({ error: '游戏不存在' });
+//     }
     
-    res.json(gameInfo);
-  } catch (error) {
-    console.error('获取游戏信息错误:', error);
-    res.status(500).json({ error: '获取游戏信息失败' });
-  }
-});
+//     res.json(gameInfo);
+//   } catch (error) {
+//     console.error('获取游戏信息错误:', error);
+//     res.status(500).json({ error: '获取游戏信息失败' });
+//   }
+// });
 
 // 积分相关API
 app.post('/api/scores/transaction', authenticateToken, async (req, res) => {
@@ -514,6 +516,19 @@ app.post('/api/games/:gameId/kick', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('踢出玩家错误:', error);
     res.status(500).json({ error: '踢出玩家失败: ' + error.message });
+  }
+});
+
+app.get('/api/games/list', authenticateToken, async (req, res) => {
+  try {
+    const { userId } = req.user;
+    console.log(userId);
+    const games = await gameServices.getGames(userId);
+    console.log(games);
+    // js 下划线转驼峰工具
+    res.json(games);
+  } catch (error) {
+    console.error('获取游戏列表错误:', error);
   }
 });
 
