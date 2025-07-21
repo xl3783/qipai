@@ -1,15 +1,11 @@
-export default {
+export default defineAppConfig({
   pages: [
-    'pages/index/index',
-    'pages/room/room',
-    'pages/settlement/settlement',
-    'pages/settlement-demo/settlement-demo',
-    'pages/game-history/game-history'
+    'pages/index/index'
   ],
   window: {
     backgroundTextStyle: 'light',
     navigationBarBackgroundColor: '#fff',
-    navigationBarTitleText: '打牌记账',
+    navigationBarTitleText: 'WeChat',
     navigationBarTextStyle: 'black'
   }
-};
+})
