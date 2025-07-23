@@ -1,6 +1,9 @@
 export default defineAppConfig({
   pages: [
-    'pages/index/index'
+    'pages/index/index',
+    'pages/room/index',
+    'pages/settlement/index',
+    'pages/game-history/index'
   ],
   window: {
     backgroundTextStyle: 'light',

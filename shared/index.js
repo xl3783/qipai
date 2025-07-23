@@ -9,4 +9,4 @@ class MyCommonClass {
   }
 }
 
-module.exports = MyCommonClass;
+export default MyCommonClass;
