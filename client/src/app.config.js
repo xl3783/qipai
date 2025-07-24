@@ -1,6 +1,7 @@
 
 export default defineAppConfig({
   pages: [
+    'pages/room/index',
     'pages/profile/index',
     // 'pages/index/index',
     // 'pages/battle-records/index',
