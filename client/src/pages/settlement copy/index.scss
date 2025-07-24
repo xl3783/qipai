@@ -1,0 +1,45 @@
+/* settlement页面样式 */
+.settlement-page {
+  min-height: 100vh;
+  background-color: #f9fafb;
+}
+
+.settlement-header {
+  background-color: white;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 1rem;
+}
+
+.settlement-content {
+  padding: 1rem;
+}
+
+.settlement-card {
+  background-color: white;
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+  margin-bottom: 1rem;
+}
+
+.settlement-button {
+  background-color: #f97316;
+  color: white;
+  border: none;
+  border-radius: 0.375rem;
+  padding: 0.75rem 1.5rem;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.settlement-button:hover {
+  background-color: #ea580c;
+}
+
+.settlement-button-secondary {
+  background-color: transparent;
+  color: #f97316;
+  border: 1px solid #f97316;
+  border-radius: 0.375rem;
+  padding: 0.75rem 1.5rem;
+  font-weight: 500;
+} 

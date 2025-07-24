@@ -1,6 +1,9 @@
 
 export default defineAppConfig({
   pages: [
+    'pages/transfer/index',
+    'pages/settlement/index',
+    'pages/battle-records/index',
     'pages/room/index',
     'pages/profile/index',
     // 'pages/index/index',
