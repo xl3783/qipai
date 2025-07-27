@@ -69,13 +69,10 @@ export default function Index() {
   }
 
   return (
-    <View className="min-h-screen bg-gray-50">
-      <View className="bg-white border-b p-4 flex items-center justify-between">
-        <View className="text-lg font-semibold">游戏记账本</View>
-      </View>
-      
-      {/* Profile Section */}
-      <View className="bg-white p-6 text-center flex flex-col items-center">
+    <View className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+      <View className="container mx-auto px-4 py-8 max-w-md">
+{/* Profile Section */}
+<View className="bg-white p-6 text-center flex flex-col items-center">
         <PlayerAvatar
           name={userInfo?.username || "用户"}
           avatar={userInfo?.avatarUrl}
@@ -136,12 +133,18 @@ export default function Index() {
         {/* Bottom Navigation */}
         <View className="flex justify-center gap-4 pt-4 mt-4">
           {/* <TaroButton>客服</TaroButton> */}
-          <TaroButton
-          className="text-orange-500 border-orange-500">
-            获取头像昵称</TaroButton>
+          <Button
+          className="w-full h-16 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold shadow-lg text-lg">
+            获取头像昵称</Button>
           {/* <TaroButton>使用手册</TaroButton> */}
         </View>
       </View>
+      </View>
+      {/* <View className="bg-white border-b p-4 flex items-center justify-between">
+        <View className="text-lg font-semibold">游戏记账本</View>
+      </View> */}
+      
+      
       
       {/* QR Code Modal */}
       {/* <QRCodeModal
