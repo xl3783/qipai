@@ -1,0 +1,165 @@
+/* Transaction History Component Styles */
+
+.transaction-history {
+  width: 100%;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  border-radius: 0.5rem;
+  border: 1px solid #e5e7eb;
+  background-color: #ffffff;
+  color: #374151;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+}
+
+.transaction-header {
+  padding: 1rem;
+  border-bottom: 1px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.transaction-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.75rem;
+}
+
+.transaction-count {
+  font-size: 0.875rem;
+  font-weight: 400;
+  color: #6b7280;
+}
+
+.transaction-summary {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  gap: 0.5rem;
+}
+
+.transaction-total {
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+.total-amount {
+  font-weight: 600;
+  color: #ea580c;
+}
+
+.transaction-content {
+  padding: 1rem;
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 2rem 0;
+  color: #6b7280;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.empty-icon {
+  font-size: 2.25rem;
+  margin-bottom: 0.5rem;
+  display: block;
+}
+
+.empty-text {
+  display: block;
+}
+
+.transaction-list {
+  height: 16rem;
+  width: 100%;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.transaction-items {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.transaction-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem;
+  background-color: #f9fafb;
+  border-radius: 0.5rem;
+}
+
+.transaction-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 1;
+}
+
+.transaction-players {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+}
+
+.player-name {
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.transaction-arrow {
+  margin: 0 0.25rem;
+}
+
+.transaction-amount {
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.amount-text {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #ea580c;
+}
+
+.transaction-stats {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+.stats-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.875rem;
+}
+
+.stats-label {
+  color: #6b7280;
+}
+
+.stats-details {
+  display: flex;
+  gap: 1rem;
+}
+
+.stats-value {
+  font-weight: 600;
+}
+
+.stats-value.total {
+  color: #ea580c;
+} 

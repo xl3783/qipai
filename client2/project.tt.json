@@ -1,0 +1,11 @@
+{
+  "miniprogramRoot": "./",
+  "projectname": "game-accounting",
+  "appid": "testAppId",
+  "setting": {
+    "es6": false,
+    "minified": false,
+    "urlCheck": false,
+    "compileHotReLoad": true
+  }
+}

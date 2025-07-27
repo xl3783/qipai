@@ -1,0 +1,18 @@
+{
+  "miniprogramRoot": "./dist",
+  "projectname": "game-accounting",
+  "description": "",
+  "appid": "touristappid",
+  "setting": {
+    "urlCheck": false,
+    "es6": false,
+    "enhance": false,
+    "compileHotReLoad": true,
+    "postcss": false,
+    "minified": false,
+    "checkSiteMap": false,
+    "preloadBackgroundData": false,
+    "autoAudits": false
+  },
+  "compileType": "miniprogram"
+}

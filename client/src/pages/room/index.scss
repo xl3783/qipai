@@ -1,0 +1,299 @@
+.index-container {
+    min-height: 100vh;
+    background: linear-gradient(135deg, #e3f2fd 0%, #ffffff 50%, #f3e5f5 100%);
+    padding: 24px 16px;
+  
+    .header {
+      margin-bottom: 32px;
+  
+      .room-info {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+  
+        .room-icon {
+          font-size: 24px;
+          padding: 8px;
+          background: #e3f2fd;
+          border-radius: 12px;
+        }
+  
+        .room-details {
+          .room-title {
+            font-size: 24px;
+            font-weight: bold;
+            color: #1a1a1a;
+            display: block;
+          }
+  
+          .room-subtitle {
+            font-size: 14px;
+            color: #666;
+            display: block;
+          }
+        }
+      }
+    }
+  
+    .roommates-card, .transaction-card {
+      background: rgba(255, 255, 255, 0.8);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 24px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  
+      .card-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 16px;
+  
+        .section-icon {
+          font-size: 20px;
+        }
+  
+        .section-title {
+          font-size: 18px;
+          font-weight: 600;
+          color: #1a1a1a;
+        }
+      }
+    }
+  
+    .roommates-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+  
+      .roommate-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 16px;
+        background: linear-gradient(135deg, #e3f2fd, #f3e5f5);
+        border-radius: 12px;
+        border: 1px solid #e3f2fd;
+  
+        .avatar {
+          width: 64px;
+          height: 64px;
+          background: #2196f3;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin-bottom: 12px;
+          box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3);
+  
+          .avatar-text {
+            color: white;
+            font-size: 24px;
+            font-weight: bold;
+          }
+        }
+  
+        .roommate-name {
+          font-weight: 600;
+          color: #1a1a1a;
+          margin-bottom: 8px;
+        }
+  
+        .balance-badge {
+          background: #e8f5e8;
+          color: #2e7d32;
+          padding: 4px 12px;
+          border-radius: 12px;
+  
+          .balance-text {
+            font-weight: 600;
+          }
+        }
+      }
+    }
+  
+    .expense-summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px;
+      background: linear-gradient(135deg, #fff3e0, #ffebee);
+      border-radius: 12px;
+      border: 1px solid #ffcc02;
+      margin-bottom: 16px;
+  
+      .summary-left {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+  
+        .summary-icon {
+          font-size: 20px;
+          padding: 8px;
+          background: #fff3e0;
+          border-radius: 8px;
+        }
+  
+        .summary-info {
+          .summary-title {
+            font-weight: 600;
+            color: #1a1a1a;
+            display: block;
+          }
+  
+          .summary-subtitle {
+            font-size: 14px;
+            color: #666;
+            display: block;
+          }
+        }
+      }
+  
+      .summary-amount {
+        font-size: 24px;
+        font-weight: bold;
+        color: #f57c00;
+      }
+    }
+  
+    .transactions-list {
+      margin-bottom: 16px;
+  
+      .transaction-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 16px;
+        background: #f5f5f5;
+        border-radius: 12px;
+        margin-bottom: 8px;
+  
+        .transaction-users {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+  
+          .user-avatar {
+            width: 40px;
+            height: 40px;
+            background: #2196f3;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+  
+            .avatar-text {
+              color: white;
+              font-size: 14px;
+              font-weight: bold;
+            }
+          }
+  
+          .arrow {
+            color: #666;
+            font-size: 16px;
+          }
+  
+          .transaction-info {
+            .transaction-text {
+              font-weight: 500;
+              color: #1a1a1a;
+              display: block;
+            }
+  
+            .transaction-type {
+              font-size: 12px;
+              color: #666;
+              display: block;
+            }
+          }
+        }
+  
+        .transaction-amount {
+          font-size: 18px;
+          font-weight: bold;
+          color: #4caf50;
+        }
+      }
+    }
+  
+    .daily-summary {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      padding: 16px;
+      background: #e3f2fd;
+      border-radius: 12px;
+  
+      .summary-item {
+        text-align: center;
+  
+        .summary-label {
+          font-size: 12px;
+          color: #666;
+          display: block;
+          margin-bottom: 4px;
+        }
+  
+        .summary-value {
+          font-size: 18px;
+          font-weight: bold;
+          color: #1a1a1a;
+  
+          &.amount {
+            color: #2196f3;
+          }
+        }
+      }
+    }
+  
+    .action-buttons {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+  
+      .primary-button {
+        background: linear-gradient(135deg, #2196f3, #9c27b0);
+        color: white;
+        border: none;
+        border-radius: 12px;
+        padding: 16px 8px;
+        font-size: 14px;
+        font-weight: 600;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+  
+        .button-icon {
+          font-size: 20px;
+        }
+  
+        .button-text {
+          font-size: 12px;
+        }
+      }
+  
+      .secondary-button {
+        background: rgba(255, 255, 255, 0.8);
+        color: #333;
+        border: 2px solid #e3f2fd;
+        border-radius: 12px;
+        padding: 16px 8px;
+        font-size: 14px;
+        font-weight: 600;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+  
+        .button-icon {
+          font-size: 20px;
+        }
+  
+        .button-text {
+          font-size: 12px;
+        }
+      }
+    }
+  }
