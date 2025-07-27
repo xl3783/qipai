@@ -1,6 +1,7 @@
 // 测试GraphQL客户端是否能在微信小程序环境中正常工作
 import { client } from '../graphql/client2';
 import Taro from '@tarojs/taro';
+import { apiConfig } from '../config/api';
 
 export const testGraphQLClient = async () => {
   try {
@@ -23,7 +24,7 @@ export const testGraphQLClient = async () => {
       `;
       
       const response = await Taro.request({
-        url: 'http://localhost:3000/graphql',
+        url: `${apiConfig.graphqlURL}`,
         method: 'POST',
         header: {
           'Content-Type': 'application/json',

@@ -71,11 +71,11 @@ export default function Index() {
   return (
     <View className="min-h-screen bg-gray-50">
       <View className="bg-white border-b p-4 flex items-center justify-between">
-        <View className="text-lg font-semibold">打牌记账</View>
+        <View className="text-lg font-semibold">游戏记账本</View>
       </View>
       
       {/* Profile Section */}
-      <View className="bg-white p-6 text-center">
+      <View className="bg-white p-6 text-center flex flex-col items-center">
         <PlayerAvatar
           name={userInfo?.username || "用户"}
           avatar={userInfo?.avatarUrl}
@@ -111,7 +111,7 @@ export default function Index() {
       
       {/* Action Buttons */}
       <View className="p-4">
-        <View className="grid grid-cols-2 gap-4">
+        <View className="flex flex-col gap-4">
           <TaroButton
             onClick={handleCreateRoom}
             className="bg-orange-500 h-12"

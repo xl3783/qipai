@@ -1,6 +1,7 @@
 import Taro from "@tarojs/taro";
 import { restClient } from "../services/restClient.js";
 import { LoginResponse, UserInfo, WechatUserInfo } from "../types/index";
+import { apiConfig } from "../config/api";
 
 export class IndexPageModel {
   /**
@@ -14,7 +15,7 @@ export class IndexPageModel {
 
       // 调用登录API
       const response = await Taro.request({
-        url: "http://localhost:3000/api/wechat-login",
+        url: `${apiConfig.baseURL}/api/wechat-login`,
         method: "POST",
         data: { code: res.code },
       });

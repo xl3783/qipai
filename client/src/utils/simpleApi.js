@@ -1,4 +1,5 @@
 import Taro from '@tarojs/taro'
+import { apiConfig } from '../config/api'
 
 // 简单的API调用函数
 export const api = {
@@ -40,7 +41,7 @@ export const api = {
       
       // 调用后端API
       const response = await Taro.request({
-        url: 'http://localhost:3000/api/wechat-login',
+        url: `${apiConfig.baseURL}/api/wechat-login`,
         method: 'POST',
         data: { code: res.code }
       })

@@ -375,12 +375,13 @@
 // }; 
 
 import Taro from '@tarojs/taro'
+import { apiConfig } from '../config/api'
 
 const headers = {
   'Content-Type': 'application/json',
   'Authorization': `Bearer ${Taro.getStorageSync('token')}`,
 }
-const baseURL = 'http://localhost:3000'
+const baseURL = apiConfig.baseURL
 
 const restClient = {
   get: async (url, params = {}, config = {}) => {

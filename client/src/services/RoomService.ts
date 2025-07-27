@@ -1,4 +1,5 @@
 import Taro from "@tarojs/taro";
+import { apiConfig } from "../config/api";
 
 interface Room {
     gameId: string;
@@ -24,7 +25,7 @@ export class RoomService {
         }
         
         const result = await Taro.request({
-            url: 'http://localhost:3000/api/games/create',
+            url: `${apiConfig.baseURL}/api/games/create`,
             method: 'POST',
             header: {
                 'Authorization': `Bearer ${token}`
@@ -40,7 +41,7 @@ export class RoomService {
         }
 
         const result = await Taro.request({
-            url: 'http://localhost:3000/api/games/join',
+            url: `${apiConfig.baseURL}/api/games/join`,
             method: 'POST',
             header: {
                 'Authorization': `Bearer ${token}`
@@ -59,7 +60,7 @@ export class RoomService {
         }
 
         const result = await Taro.request({
-            url: 'http://localhost:3000/api/games/leave',
+            url: `${apiConfig.baseURL}/api/games/leave`,
             method: 'POST',
             header: {
                 'Authorization': `Bearer ${token}`

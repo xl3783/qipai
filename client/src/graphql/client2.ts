@@ -3,6 +3,7 @@ import { GraphQLWsLink } from '@apollo/client/link/subscriptions';
 import { getMainDefinition } from '@apollo/client/utilities';
 import { createClient } from 'graphql-ws';
 import Taro from '@tarojs/taro';
+import { apiConfig } from '../config/api';
 
 // 自定义fetch函数，适配微信小程序环境
 const customFetch = async (uri: string, options: RequestInit): Promise<Response> => {
@@ -37,7 +38,7 @@ const customFetch = async (uri: string, options: RequestInit): Promise<Response>
 
 // HTTP链接用于查询和变更
 const httpLink = createHttpLink({
-  uri: 'http://localhost:15000/graphql', // 替换为你的GraphQL服务器地址
+  uri: apiConfig.graphqlURL, // 替换为你的GraphQL服务器地址
   fetch: customFetch,
 });
 

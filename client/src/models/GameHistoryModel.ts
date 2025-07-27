@@ -1,4 +1,5 @@
 import Taro from "@tarojs/taro";
+import { apiConfig } from "../config/api";
 
 export interface GameHistoryRoom {
   id: string;
@@ -33,23 +34,23 @@ export class GameHistoryModel {
     }
     const userId = userInfo.id;
 
-    const response = await Taro.request({
-      url: 'http://localhost:15000/graphql',
-      method: 'GET',
-      header: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      data: {
-        query: `
-          query GetRoomIdsByUserId {
-            allGameParticipantsList(condition: {playerId: "${userId}"}) {
-              gameId
+          const response = await Taro.request({
+        url: apiConfig.graphqlURL,
+        method: 'GET',
+        header: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        data: {
+          query: `
+            query GetRoomIdsByUserId {
+              allGameParticipantsList(condition: {playerId: "${userId}"}) {
+                gameId
+              }
             }
-          }
-        `
-      }
-    });
+          `
+        }
+      });
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
       const result = response.data;
@@ -72,7 +73,7 @@ export class GameHistoryModel {
 
 
       const response = await Taro.request({
-        url: 'http://localhost:3000/api/games/list',
+        url: `${apiConfig.baseURL}/api/games/list`,
         method: 'GET',
         header: {
           'Content-Type': 'application/json',
