@@ -7,6 +7,7 @@ const jwt = require('jsonwebtoken');
 const axios = require('axios');
 const { Pool } = require('pg');
 const { GameServices, convertKeysToCamelCase } = require('./gameServices');
+const sseRouter = require('./routers/sse_router');
 require('dotenv').config();
 
 // 创建Express应用
@@ -77,6 +78,9 @@ const limiter = rateLimit({
   message: '请求过于频繁，请稍后再试'
 });
 app.use('/api/', limiter);
+
+// 使用sseRouter (在中间件配置之后)
+app.use('/sse', sseRouter);
 
 // 数据库连接测试
 pool.on('connect', () => {
