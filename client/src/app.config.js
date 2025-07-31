@@ -1,8 +1,8 @@
 export default {
   pages: [
-    'pages/index/index',
-    'pages/room/room',
     'pages/settlement/settlement',
+    'pages/room/room',
+    'pages/index/index',
     'pages/settlement-demo/settlement-demo',
     'pages/game-history/game-history'
   ],

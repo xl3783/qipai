@@ -1,6 +1,5 @@
 import {View, Button as TaroButton, Input, Button, Text, Image} from "@tarojs/components";
 import PlayerAvatar from "../../components/player-avatar.js";
-import GameStatsDisplay from "../../components/game-stats.js";
 // import QRCodeModal from "../../components/qr-code-modal.js";
 import {useEffect, useState, useCallback} from "react";
 import Taro from "@tarojs/taro";

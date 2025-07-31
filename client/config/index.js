@@ -1,4 +1,5 @@
 import { defineConfig } from '@tarojs/cli'
+const { UnifiedWebpackPluginV5 } = require('weapp-tailwindcss/webpack')
 
 import devConfig from './dev'
 import prodConfig from './prod'
@@ -32,6 +33,35 @@ export default defineConfig(async (merge, { command, mode }) => {
       enable: false // Webpack 持久化缓存配置，建议开启。默认配置请参考：https://docs.taro.zone/docs/config-detail#cache
     },
     mini: {
+      // 开启 webpack5 的持久化缓存
+      webpackChain(chain) {
+        chain.merge({
+          module: {
+            rules: [
+              {
+                test: /\.m?js$/,
+                resolve: {
+                  fullySpecified: false
+                }
+              }
+            ]
+          }
+        })
+        // 添加 weapp-tailwindcss 插件
+        chain.merge({
+          plugin: {
+            install: {
+              plugin: UnifiedWebpackPluginV5,
+              args: [{
+                appType: 'taro',
+                // 下面个配置，会开启 rem -> rpx 的转化
+                rem2rpx: true
+              }]
+            }
+          }
+        })
+      },
+      // 开启 webpack5 的持久化缓存
       postcss: {
         pxtransform: {
           enable: true,
@@ -46,9 +76,9 @@ export default defineConfig(async (merge, { command, mode }) => {
           }
         },
         cssModules: {
-          enable: false, // 默认为 false，如需使用 css modules 功能，则设为 true
+          enable: false, // 如果需要 cssModules 功能，请设置为 true
           config: {
-            namingPattern: 'module', // 转换模式，取值为 global/module
+            namingPattern: 'module',
             generateScopedName: '[name]__[local]___[hash:base64:5]'
           }
         }
@@ -57,42 +87,75 @@ export default defineConfig(async (merge, { command, mode }) => {
     h5: {
       publicPath: '/',
       staticDirectory: 'static',
-      output: {
-        filename: 'js/[name].[hash:8].js',
-        chunkFilename: 'js/[name].[chunkhash:8].js'
-      },
-      miniCssExtractPluginOption: {
-        ignoreOrder: true,
-        filename: 'css/[name].[hash].css',
-        chunkFilename: 'css/[name].[chunkhash].css'
+      // 开启 webpack5 的持久化缓存
+      webpackChain(chain) {
+        chain.merge({
+          module: {
+            rules: [
+              {
+                test: /\.m?js$/,
+                resolve: {
+                  fullySpecified: false
+                }
+              }
+            ]
+          }
+        })
       },
       postcss: {
         autoprefixer: {
           enable: true,
-          config: {}
+          config: {
+
+          }
         },
         cssModules: {
-          enable: false, // 默认为 false，如需使用 css modules 功能，则设为 true
+          enable: false, // 如果需要 cssModules 功能，请设置为 true
           config: {
-            namingPattern: 'module', // 转换模式，取值为 global/module
+            namingPattern: 'module',
             generateScopedName: '[name]__[local]___[hash:base64:5]'
           }
         }
       }
-    },
-    rn: {
-      appName: 'taroDemo',
-      postcss: {
-        cssModules: {
-          enable: false, // 默认为 false，如需使用 css modules 功能，则设为 true
-        }
-      }
     }
   }
+
   if (process.env.NODE_ENV === 'development') {
-    // 本地开发构建配置（不混淆压缩）
     return merge({}, baseConfig, devConfig)
+  } else {
+    return merge({}, baseConfig, prodConfig, {
+      mini: {
+        webpackChain(chain) {
+          chain.merge({
+            module: {
+              rules: [
+                {
+                  test: /\.m?js$/,
+                  resolve: {
+                    fullySpecified: false
+                  }
+                }
+              ]
+            }
+          })
+        }
+      },
+      h5: {
+        webpackChain(chain) {
+          chain.merge({
+            module: {
+              rules: [
+                {
+                  test: /\.m?js$/,
+                  resolve: {
+                    fullySpecified: false
+                  }
+                }
+              ]
+            }
+          })
+        }
+      }
+    })
   }
-  // 生产构建配置（默认开启压缩混淆等）
-  return merge({}, baseConfig, prodConfig)
 })

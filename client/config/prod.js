@@ -21,6 +21,10 @@ export default {
           drop_debugger: true
         }
       }
+    },
+    // 禁用 CSS 压缩以避免 WXSS 编译错误
+    cssMinifier: {
+      enable: false
     }
   },
   
