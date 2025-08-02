@@ -1,0 +1,143 @@
+// Room页面样式
+.room-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #f9fafb;
+  position: relative;
+}
+
+.room-header {
+  background: #fff;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.room-header-title {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.room-notice {
+  background: #fef3c7;
+  padding: 12px 16px;
+  color: #b45309;
+  font-size: 14px;
+}
+
+.room-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  padding-bottom: 64px; /* 留出底部按钮栏空间 */
+}
+
+.room-players {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 16px;
+  margin: 24px 16px 16px 16px;
+}
+.room-player-item {
+  text-align: center;
+}
+.room-player-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: #f3f4f6;
+  border-radius: 12px;
+  padding: 12px 0;
+  border: none;
+}
+.room-player-btn:active {
+  background: #e5e7eb;
+}
+.room-player-name {
+  font-size: 12px;
+  font-weight: 500;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.room-player-score {
+  font-size: 14px;
+  font-weight: bold;
+  color: #f97316;
+}
+.room-player-avatar-add {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+}
+
+.room-history {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  padding: 0 16px 16px 16px;
+}
+
+.room-footer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  background: #fff;
+  border-top: 1px solid #e5e7eb;
+  z-index: 10;
+  height: 100px;
+  display: flex;
+  align-items: center;
+}
+.room-footer-btns {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  width: 100%;
+  height: 100%;
+  padding: 0 16px;
+}
+.room-footer-btn {
+  width: 100%;
+  height: 100%;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+  background: #d1d5db;
+  transition: background 0.2s;
+}
+.room-footer-btn-transfer {
+  background: #22c55e;
+}
+.room-footer-btn-transfer:active {
+  background: #16a34a;
+}
+.room-footer-btn-settle {
+  background: #f97316;
+}
+.room-footer-btn-settle:active {
+  background: #ea580c;
+}
+.room-footer-btn-exit {
+  background: #6b7280;
+}
+.room-footer-btn-exit:active {
+  background: #374151;
+} 

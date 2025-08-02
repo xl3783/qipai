@@ -122,10 +122,14 @@ export default function Index() {
                             加入房间
                         </TaroButton>
                         <TaroButton
-                            onClick={() => handleJoinRoom("jyyj")}
+                            onClick={() => {
+                                Taro.navigateTo({
+                                    url: '/pages/rooms/rooms'
+                                })
+                            }}
                             className="w-full h-16 border-2 border-blue-200 hover:bg-blue-50 font-semibold text-lg bg-white/80 backdrop-blur-sm flex items-center justify-center"
                         >
-                            扫码进房
+                            历史房间
                         </TaroButton>
                     </View>
                 </View>

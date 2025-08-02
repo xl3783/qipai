@@ -1,9 +1,9 @@
 export default {
   pages: [
-    'pages/settlement/settlement',
-    'pages/room/room',
     'pages/index/index',
-    'pages/settlement-demo/settlement-demo',
+    'pages/room/room',
+    'pages/rooms/rooms',
+    'pages/settlement/settlement',
     'pages/game-history/game-history'
   ],
   window: {
