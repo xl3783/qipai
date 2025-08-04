@@ -7,6 +7,11 @@
     "start": "node app.js",
     "dev": "nodemon app.js",
     "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:business": "jest business-process.test.js",
+    "test:unit": "jest game-services.test.js",
+    "test:integration": "jest api-integration.test.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix"
   },

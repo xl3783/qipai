@@ -57,6 +57,65 @@ const dbService = {
   }
 };
 
+// 自动关闭超时房间的定时任务
+const autoCloseInactiveRooms = async () => {
+  try {
+    console.log('执行自动关闭超时房间任务...');
+    
+    // 查找超过1小时没有交易记录且状态为active的游戏
+    const inactiveGames = await dbService.query(`
+      SELECT DISTINCT g.game_id, g.game_name, g.start_time, g.created_by
+      FROM games g
+      LEFT JOIN score_transactions st ON g.game_id = st.game_id
+      WHERE g.status = 'active'
+      AND (
+        -- 没有交易记录且开始时间超过1小时
+        (st.transaction_id IS NULL AND g.start_time < NOW() - INTERVAL '1 hour')
+        OR
+        -- 有交易记录但最后一次交易超过1小时
+        (st.transaction_id IS NOT NULL AND st.event_time < NOW() - INTERVAL '1 hour')
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM score_transactions st2 
+        WHERE st2.game_id = g.game_id 
+        AND st2.event_time >= NOW() - INTERVAL '1 hour'
+      )
+    `);
+    
+    if (inactiveGames.rows.length === 0) {
+      console.log('没有需要关闭的超时房间');
+      return;
+    }
+    
+    console.log(`找到 ${inactiveGames.rows.length} 个超时房间需要关闭`);
+    
+    // 批量关闭超时房间
+    for (const game of inactiveGames.rows) {
+      try {
+        await gameServices.endGame(game.game_id);
+        console.log(`已自动关闭房间: ${game.game_name} (ID: ${game.game_id})`);
+      } catch (error) {
+        console.error(`关闭房间 ${game.game_name} (ID: ${game.game_id}) 失败:`, error.message);
+      }
+    }
+    
+    console.log('自动关闭超时房间任务完成');
+  } catch (error) {
+    console.error('自动关闭超时房间任务执行失败:', error);
+  }
+};
+
+// 启动定时任务 - 每30分钟执行一次
+const startAutoCloseTask = () => {
+  // 立即执行一次
+  autoCloseInactiveRooms();
+  
+  // 设置定时器，每30分钟执行一次
+  setInterval(autoCloseInactiveRooms, 30 * 60 * 1000);
+  
+  console.log('自动关闭超时房间定时任务已启动 (每30分钟执行一次)');
+};
+
 // 初始化游戏服务 - 传入数据库服务对象
 const gameServices = new GameServices(dbService);
 
@@ -299,22 +358,6 @@ app.post('/api/games/create', authenticateToken, async (req, res) => {
   }
 });
 
-// app.get('/api/games/:gameId', authenticateToken, async (req, res) => {
-//   try {
-//     const { gameId } = req.params;
-    
-//     const gameInfo = await gameServices.getGameInfo(gameId);
-    
-//     if (!gameInfo) {
-//       return res.status(404).json({ error: '游戏不存在' });
-//     }
-    
-//     res.json(gameInfo);
-//   } catch (error) {
-//     console.error('获取游戏信息错误:', error);
-//     res.status(500).json({ error: '获取游戏信息失败' });
-//   }
-// });
 
 // 积分相关API
 app.post('/api/scores/transaction', authenticateToken, async (req, res) => {
@@ -491,34 +534,6 @@ app.post('/api/games/transfer', authenticateToken, async (req, res) => {
   }
 });
 
-app.post('/api/games/:gameId/kick', authenticateToken, async (req, res) => {
-  try {
-    const { gameId } = req.params;
-    const { player_id, reason } = req.body;
-    const { userId } = req.user;
-    
-    // 检查权限（只有游戏创建者或管理员可以踢出玩家）
-    const gameInfo = await gameServices.getGameInfo(gameId);
-    if (!gameInfo) {
-      return res.status(404).json({ error: '游戏不存在' });
-    }
-    
-    if (gameInfo.created_by !== userId && req.user.role !== 'admin') {
-      return res.status(403).json({ error: '权限不足' });
-    }
-    
-    const result = await gameServices.kickPlayer(gameId, player_id, reason);
-    
-    res.json({
-      success: true,
-      message: '玩家已被踢出游戏'
-    });
-  } catch (error) {
-    console.error('踢出玩家错误:', error);
-    res.status(500).json({ error: '踢出玩家失败: ' + error.message });
-  }
-});
-
 app.get('/api/games/list', authenticateToken, async (req, res) => {
   try {
     const { userId } = req.user;
@@ -543,24 +558,30 @@ app.use('*', (req, res) => {
   res.status(404).json({ error: '接口不存在' });
 });
 
-// 启动服务器
-app.listen(PORT, () => {
-  console.log(`服务器运行在端口 ${PORT}`);
-  console.log(`环境: ${process.env.NODE_ENV || 'development'}`);
-});
-
-// 优雅关闭
-process.on('SIGTERM', () => {
-  console.log('收到SIGTERM信号，正在关闭服务器...');
-  pool.end();
-  process.exit(0);
-});
-
-process.on('SIGINT', () => {
-  console.log('收到SIGINT信号，正在关闭服务器...');
-  pool.end();
-  process.exit(0);
-});
-
 // 导出app和数据库服务，以便其他模块使用
 module.exports = { app, dbService, pool };
+
+// 只在非测试环境下启动服务器
+if (process.env.NODE_ENV !== 'test') {
+  // 启动服务器
+  app.listen(PORT, () => {
+    console.log(`服务器运行在端口 ${PORT}`);
+    console.log(`环境: ${process.env.NODE_ENV || 'development'}`);
+    
+    // 启动自动关闭超时房间的定时任务
+    startAutoCloseTask();
+  });
+
+  // 优雅关闭
+  process.on('SIGTERM', () => {
+    console.log('收到SIGTERM信号，正在关闭服务器...');
+    pool.end();
+    process.exit(0);
+  });
+
+  process.on('SIGINT', () => {
+    console.log('收到SIGINT信号，正在关闭服务器...');
+    pool.end();
+    process.exit(0);
+  });
+}

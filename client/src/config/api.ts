@@ -7,10 +7,15 @@ export interface ApiConfig {
 }
 
 // 开发环境配置
+// const devConfig: ApiConfig = {
+//   baseURL: 'http://localhost:3000',
+//   graphqlURL: 'http://localhost:15000/graphql',
+//   wsURL: 'ws://localhost:4000/subscriptions',
+// };
 const devConfig: ApiConfig = {
-  baseURL: 'http://localhost:3000',
-  graphqlURL: 'http://localhost:15000/graphql',
-  wsURL: 'ws://localhost:4000/subscriptions',
+  baseURL: 'https://www.jzydkj.com/app1',
+  graphqlURL: 'https://www.jzydkj.com/graphql',
+  wsURL: 'wss://www.jzydkj.com/app1/subscriptions',
 };
 
 // 生产环境配置
