@@ -6,68 +6,26 @@ import SpendingLimitModal from '../../components/spending-limit-modal.js'
 import TransferModal from '../../components/transfer-modal.js'
 import TransactionHistory from '../../components/transaction-history.js'
 import './rooms.scss'
-import { useCallback, useState } from 'react'
+import { useCallback, useState, useEffect } from 'react'
 import QRCodeModal from '../../components/qr-code-modal.js'
 import { Icons } from '../../components/icons.jsx'
 import ModalDialog from '../../components/modal-dialog.jsx'
 import { AtCard } from "taro-ui"
+import { restClient } from '../../services/restClient.js'
 
 export default function Rooms() {
-  const runningRooms = [
-    {
-      id: 123,
-      name: "房间123",
-      status: "进行中",
-      host: "张三",
-      participants: 4,
-      currentParticipants: ["张三", "李四", "王五", "赵六"],
-      date: "2024/5/24",
-      totalAmount: 200,
-      myBalance: 50,
-      isActive: true,
-    },
-    {
-      id: 456,
-      name: "房间456",
-      status: "进行中",
-      host: "李四",
-      participants: 3,
-      currentParticipants: ["李四", "王五", "赵六"],
-      date: "2024/5/23",
-      totalAmount: 150,
-      myBalance: -25,
-      isActive: true,
-    },
-  ]
 
-  const closedRooms = [
-    {
-      id: 789,
-      name: "房间789",
-      status: "已关闭",
-      host: "王五",
-      participants: 4,
-      currentParticipants: ["张三", "李四", "王五", "赵六"],
-      date: "2024/5/20",
-      totalAmount: 300,
-      myBalance: 75,
-      isActive: false,
-      finalRank: 1,
-    },
-    {
-      id: 101,
-      name: "房间101",
-      status: "已关闭",
-      host: "赵六",
-      participants: 3,
-      currentParticipants: ["李四", "王五", "赵六"],
-      date: "2024/5/18",
-      totalAmount: 180,
-      myBalance: -30,
-      isActive: false,
-      finalRank: 3,
-    },
-  ]
+  const [rooms, setRooms] = useState([])
+
+  useEffect(() => {
+
+    const getRooms = async () => {
+      const result = await restClient.get("/api/get-rooms");
+      console.log('rooms', result.data);
+      setRooms(result.data);
+    }
+    getRooms();
+  }, []);
 
   const RoomCard = ({ room }) => (
     <View className="mb-4 p-4 rounded-lg shadow-lg border-0 bg-white/80 backdrop-blur-sm hover:shadow-xl transition-all duration-200"
@@ -125,20 +83,16 @@ export default function Rooms() {
               <View className="flex items-center gap-4 text-sm text-gray-600">
                 <View className="flex items-center gap-1">
                   {/* <Users className="h-4 w-4" /> */}
-                  {room.participants}人
+                  {room.participants.length}人
                 </View>
                 <View className="flex items-center gap-1">
                   {/* <Calendar className="h-4 w-4" /> */}
-                  {room.date}
+                  {/* {room.date} */}
                 </View>
               </View>
             </View>
           </View>
           <View className="text-right">
-            <View className="flex items-center gap-1 text-sm text-gray-600 mb-1">
-              {/* <DollarSign className="h-3 w-3" /> */}
-              总额: ¥{room.totalAmount}
-            </View>
             <View className={`text-lg font-semibold ${room.myBalance >= 0 ? "text-green-600" : "text-red-600"}`}>
               {room.myBalance >= 0 ? "+" : ""}¥{room.myBalance}
             </View>
@@ -149,14 +103,14 @@ export default function Rooms() {
         <View className="flex items-center gap-2">
           <View className="text-sm text-gray-600">成员:</View>
           <View className="flex -space-x-2">
-            {room.currentParticipants.slice(0, 4).map((participant, index) => (
+            { room.participants.slice(0, 4).map((participant, index) => (
               <View key={index} className="h-6 w-6 ring-2 ring-white">
                 <View className="bg-purple-500 text-white text-xs">{participant.charAt(0)}</View>
               </View>
             ))}
-            {room.currentParticipants.length > 4 && (
+            {room.participants.length > 4 && (
               <View className="h-6 w-6 rounded-full bg-gray-200 ring-2 ring-white flex items-center justify-center">
-                <View className="text-xs text-gray-600">+{room.currentParticipants.length - 4}</View>
+                <View className="text-xs text-gray-600">+{room.participants.length - 4}</View>
               </View>
             )}
           </View>
@@ -181,14 +135,14 @@ export default function Rooms() {
         <View defaultValue="running" className="w-full">
 
           <View value="closed" className="space-y-4">
-            {closedRooms.length > 0 ? (
-              closedRooms.map((room) => <RoomCard key={room.id} room={room} />)
+            {rooms.length > 0 ? (
+              rooms.map((room) => <RoomCard key={room.id} room={room} />)
             ) : (
               <View className="text-center py-12">
                 <View className="text-gray-400 mb-4">
                   {/* <Square className="h-16 w-16 mx-auto" /> */}
                 </View>
-                <View className="text-gray-500 text-lg">暂无已关闭的房间</View>
+                <View className="text-gray-500 text-lg">房间为空</View>
               </View>
             )}
           </View>

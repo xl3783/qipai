@@ -7,6 +7,7 @@ import {
 } from "../types/index";
 import { GraphQLService } from "../services/GraphQLService";
 import { RoomService } from "../services/RoomService";
+import { restClient } from "../services/restClient";
 
 export class IndexPageViewModel {
   private model: IndexPageModel;
@@ -59,7 +60,13 @@ export class IndexPageViewModel {
       await this.model.wechatLogin();
     }
 
-    const userProfile = await GraphQLService.getPlayerProfile();
+    const token = Taro.getStorageSync('token');
+    restClient.setToken(token);
+
+    const userProfile = await this.model.getUserProfile();
+    console.log("userProfile", userProfile);
+
+    // const userProfile = await GraphQLService.getPlayerProfile();
     console.log("登录成功:", userProfile);
 
     const score = userProfile.scoreInfo;
@@ -112,7 +119,6 @@ export class IndexPageViewModel {
   async handleCreateRoom(): Promise<void> {
 
     const room = await RoomService.createRoom();
-    console.log("room", room);
     Taro.navigateTo({
       url: `/pages/room/room?roomId=${room.gameId}&roomName=${room.gameName}`,
     });

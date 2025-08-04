@@ -7,6 +7,8 @@ const jwt = require('jsonwebtoken');
 const axios = require('axios');
 const { Pool } = require('pg');
 const { GameServices, convertKeysToCamelCase } = require('./gameServices');
+const sseManager = require('./sse/sse_manager');
+const SSEEvent = require('./sse/sse_event');
 require('dotenv').config();
 
 // 创建Express应用
@@ -64,21 +66,16 @@ const autoCloseInactiveRooms = async () => {
     
     // 查找超过1小时没有交易记录且状态为active的游戏
     const inactiveGames = await dbService.query(`
-      SELECT DISTINCT g.game_id, g.game_name, g.start_time, g.created_by
+      SELECT DISTINCT g.game_id, g.game_name
       FROM games g
-      LEFT JOIN score_transactions st ON g.game_id = st.game_id
-      WHERE g.status = 'active'
+      LEFT JOIN transfer_records tr ON g.game_id = tr.game_id
+      WHERE g.status = 'playing'
       AND (
         -- 没有交易记录且开始时间超过1小时
-        (st.transaction_id IS NULL AND g.start_time < NOW() - INTERVAL '1 hour')
+        (tr.transfer_id IS NULL AND g.created_at < NOW() - INTERVAL '1 hour')
         OR
         -- 有交易记录但最后一次交易超过1小时
-        (st.transaction_id IS NOT NULL AND st.event_time < NOW() - INTERVAL '1 hour')
-      )
-      AND NOT EXISTS (
-        SELECT 1 FROM score_transactions st2 
-        WHERE st2.game_id = g.game_id 
-        AND st2.event_time >= NOW() - INTERVAL '1 hour'
+        (tr.transfer_id IS NOT NULL AND tr.created_at < NOW() - INTERVAL '1 hour')
       )
     `);
     
@@ -116,8 +113,26 @@ const startAutoCloseTask = () => {
   console.log('自动关闭超时房间定时任务已启动 (每30分钟执行一次)');
 };
 
-// 初始化游戏服务 - 传入数据库服务对象
-const gameServices = new GameServices(dbService);
+// 发送交易通知的辅助函数
+const sendTransactionNotification = async (transactionData) => {
+  try {
+    const event = new SSEEvent('transaction', {
+      type: 'score_transaction',
+      data: transactionData,
+      timestamp: new Date().toISOString()
+    });
+    
+    // 广播给所有连接的客户端
+    sseManager.broadcast(event);
+    
+    console.log('已发送交易通知:', transactionData);
+  } catch (error) {
+    console.error('发送交易通知失败:', error);
+  }
+};
+
+// 初始化游戏服务 - 传入数据库服务对象和通知回调
+const gameServices = new GameServices(dbService, sendTransactionNotification);
 
 // 中间件配置
 app.use(helmet()); // 安全头
@@ -190,6 +205,50 @@ app.get('/health', (req, res) => {
     database: pool.totalCount > 0 ? 'connected' : 'disconnected'
   });
 });
+
+// SSE连接端点
+app.get('/api/sse/connect', authenticateToken, (req, res) => {
+  const { userId } = req.user;
+  const clientId = `user_${userId}`;
+  
+  console.log(`用户 ${userId} 建立SSE连接`);
+  
+  // 添加客户端到SSE管理器
+  const cleanup = sseManager.addClient(clientId, res);
+  
+  // 当客户端断开连接时清理
+  req.on('close', () => {
+    console.log(`用户 ${userId} SSE连接断开`);
+    cleanup();
+  });
+});
+
+// 获取当前连接的客户端数量（调试用）
+app.get('/api/sse/status', (req, res) => {
+  res.json({
+    connectedClients: sseManager.getClientCount(),
+    timestamp: new Date().toISOString()
+  });
+});
+
+
+
+// 发送游戏状态变更通知
+const sendGameStatusNotification = async (gameData) => {
+  try {
+    const event = new SSEEvent('game_status', {
+      type: 'game_status_change',
+      data: gameData,
+      timestamp: new Date().toISOString()
+    });
+    
+    sseManager.broadcast(event);
+    
+    console.log('已发送游戏状态变更通知:', gameData);
+  } catch (error) {
+    console.error('发送游戏状态变更通知失败:', error);
+  }
+};
 
 // 随机生成UUID
 const randomUUID = () => {
@@ -273,21 +332,10 @@ app.post('/api/wechat-login', async (req, res) => {
 app.get('/api/players/profile', authenticateToken, async (req, res) => {
   try {
     const { userId } = req.user;
+
+    const result  = await gameServices.getPlayerProfile(userId);
     
-    const result = await dbService.query(`
-      SELECT p.player_id playerId, p.username, p.avatar_url avatarUrl, s.current_total as score
-      FROM players p
-      LEFT JOIN scores s ON p.player_id = s.player_id
-      WHERE p.player_id = $1
-    `, [userId]);
-    
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: '玩家不存在' });
-    }
-    
-    // 使用 convertKeysToCamelCase 处理时间转换
-    const processedResult = convertKeysToCamelCase(result.rows[0]);
-    res.json(processedResult);
+    res.json(result);
   } catch (error) {
     console.error('获取玩家信息错误:', error);
     res.status(500).json({ error: '获取玩家信息失败' });
@@ -493,6 +541,15 @@ app.post('/api/games/end', authenticateToken, async (req, res) => {
     
     await gameServices.endGame(gameId);
     
+    // 发送游戏结束通知
+    await sendGameStatusNotification({
+      gameId: gameId,
+      gameName: gameInfo.gameName,
+      status: 'finished',
+      endedBy: userId,
+      endTime: new Date().toISOString()
+    });
+    
     res.json({
       success: true,
       message: '游戏已结束'
@@ -534,11 +591,24 @@ app.post('/api/games/transfer', authenticateToken, async (req, res) => {
   }
 });
 
-app.get('/api/games/list', authenticateToken, async (req, res) => {
+
+app.post('/api/get-room-detail', authenticateToken, async (req, res) => {
+  try {
+    const { gameId } = req.body;
+    console.log(gameId);
+    const roomDetail = await gameServices.getRoomDetail(gameId);
+    console.log(roomDetail);
+    res.json(roomDetail);
+  } catch (error) {
+    console.error('获取游戏列表错误:', error);
+  }
+});
+
+app.get('/api/get-rooms', authenticateToken, async (req, res) => {
   try {
     const { userId } = req.user;
     console.log(userId);
-    const games = await gameServices.getGames(userId);
+    const games = await gameServices.getRooms(userId);
     console.log(games);
     // js 下划线转驼峰工具
     res.json(games);

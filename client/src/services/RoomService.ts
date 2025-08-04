@@ -1,5 +1,6 @@
 import Taro from "@tarojs/taro";
 import { apiConfig } from "../config/api";
+import { restClient } from "./restClient";
 
 interface Room {
     gameId: string;
@@ -17,20 +18,22 @@ interface JoinRoomResponse {
 
 export class RoomService {
 
-    static async createRoom(): Promise<Room> {
+    static async createRoom(): Promise<any> {
 
         const token = Taro.getStorageSync("token");
         if (!token) {
             throw new Error("用户未登录");
         }
+
+        const result = await restClient.post("/api/games/create");
         
-        const result = await Taro.request({
-            url: `${apiConfig.baseURL}/api/games/create`,
-            method: 'POST',
-            header: {
-                'Authorization': `Bearer ${token}`
-            }
-        });
+        // const result = await Taro.request({
+        //     url: `${apiConfig.baseURL}/api/games/create`,
+        //     method: 'POST',
+        //     header: {
+        //         'Authorization': `Bearer ${token}`
+        //     }
+        // });
         return result.data;
     }
 

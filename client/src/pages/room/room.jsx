@@ -7,16 +7,22 @@ import TransferModal from '../../components/transfer-modal.js'
 import TransactionHistory from '../../components/transaction-history.js'
 import { useRoomViewModel } from '../../hooks/useRoomViewModel.ts'
 import './room.scss'
-import { useCallback, useState } from 'react'
+import { useCallback, useState, useEffect } from 'react'
 import QRCodeModal from '../../components/qr-code-modal.js'
 import { Icons } from '../../components/icons.jsx'
 import ModalDialog from '../../components/modal-dialog.jsx'
+import { restClient } from '../../services/restClient.js'
 
 export default function Room() {
-  // // 获取页面参数
-  // const router = Taro.getCurrentInstance().router
-  // const roomId = router.params.roomId
-  // const roomName = router.params.roomName
+  // 获取页面参数
+  const router = Taro.getCurrentInstance().router
+  const roomId = router.params.roomId
+  const roomName = router.params.roomName
+
+  // restClient.post("/api/games/join", {
+  //   gameId: roomId,
+  //   playerId: playerId,
+  // });
 
   // const [shareRoom, setShareRoom] = useState(false)
 
@@ -76,19 +82,60 @@ export default function Room() {
   //   })
   // }
 
+  const [loading, setLoading] = useState(false)
+
   const [showTransferModal, setShowTransferModal] = useState(false)
   const [transferAmount, setTransferAmount] = useState(0)
-  const roommates = [
-    { name: "张三", avatar: "/placeholder.svg?height=60&width=60", balance: 100, id: "zhangsan" },
-    { name: "李四", avatar: "/placeholder.svg?height=60&width=60", balance: 100, id: "lisi" },
-    { name: "王五", avatar: "/placeholder.svg?height=60&width=60", balance: 100, id: "wangwu" },
-  ]
+  // const roommates = [
+  //   { name: "张三", avatar: "/placeholder.svg?height=60&width=60", balance: 100, id: "zhangsan" },
+  //   { name: "李四", avatar: "/placeholder.svg?height=60&width=60", balance: 100, id: "lisi" },
+  //   { name: "王五", avatar: "/placeholder.svg?height=60&width=60", balance: 100, id: "wangwu" },
+  // ]
 
-  const transactions = [
-    { from: "张三", to: "李四", amount: 100, type: "transfer" },
-    { from: "李四", to: "张三", amount: 100, type: "transfer" },
-  ]
-  const roomName = '测试房间';
+  // const transactions = [
+  //   { from: "张三", to: "李四", amount: 100, type: "transfer" },
+  //   { from: "李四", to: "张三", amount: 100, type: "transfer" },
+  // ]
+
+  const [roommates, setRoommates] = useState([])
+  const [transactions, setTransactions] = useState([])
+
+  useEffect(() => {
+    const getRoomDetail = async () => {
+      setLoading(true)
+      const result = await restClient.post("/api/get-room-detail", {
+        gameId: roomId,
+      });
+      console.log(result);
+      setRoommates(result.data.roommates)
+      setTransactions(result.data.transactions)
+      setLoading(false)
+    }
+    getRoomDetail();
+  }, []);
+
+  const leftRoom = useCallback(async () => {
+    try {
+      const result = await restClient.post("/api/games/leave", {
+        gameId: roomId,
+      });
+      console.log(result);
+      Taro.navigateTo({
+        url: '/pages/index/index',
+      });
+    } catch (error) {
+      console.error(error);
+    }
+  }, [roomId])
+
+  if (loading) {
+    return (
+      <View className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <View className="text-lg">正在加载...</View>
+      </View>
+    )
+  }
+
   return (
     <View className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50"  >
       <View className="container mx-auto px-4 py-6 max-w-6xl">
@@ -170,6 +217,7 @@ export default function Room() {
           </Button>
           <Button
             className="w-full h-14 border-2 border-gray-200 hover:bg-gray-50 font-semibold bg-transparent"
+            onClick={() => leftRoom()}  
           >
             离开
           </Button>
