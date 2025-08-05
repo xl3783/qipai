@@ -38,20 +38,9 @@ export class RoomService {
     }
 
     static async joinRoom(roomName: string): Promise<JoinRoomResponse> {
-        const token = Taro.getStorageSync("token");
-        if (!token) {
-            throw new Error("用户未登录");
-        }
-
-        const result = await Taro.request({
-            url: `${apiConfig.baseURL}/api/games/join`,
-            method: 'POST',
-            header: {
-                'Authorization': `Bearer ${token}`
-            },
-            data: {
-                gameName: roomName
-            }
+    
+        const result = await restClient.post("/api/games/join", {
+            gameName: roomName
         });
         return result.data as unknown as JoinRoomResponse;
     }

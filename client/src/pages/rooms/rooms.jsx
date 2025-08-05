@@ -18,7 +18,6 @@ export default function Rooms() {
   const [rooms, setRooms] = useState([])
 
   useEffect(() => {
-
     const getRooms = async () => {
       const result = await restClient.get("/api/get-rooms");
       console.log('rooms', result.data);
@@ -27,16 +26,24 @@ export default function Rooms() {
     getRooms();
   }, []);
 
+  // useEffect(() => {
+  //   const eventSource = new EventSource(`${apiConfig.baseURL}/api/sse`);
+  //   eventSource.onmessage = (event) => {
+  //     console.log('event', event);
+  //   }
+  // }, []);
+
   const RoomCard = ({ room }) => (
     <View className="mb-4 p-4 rounded-lg shadow-lg border-0 bg-white/80 backdrop-blur-sm hover:shadow-xl transition-all duration-200"
       onClick={() => {
+        console.log('room', room)
         if (room.isActive) {  
           Taro.navigateTo({
-            url: `/pages/room/room?id=${room.id}`
+            url: `/pages/room/room?roomId=${room.id}&roomName=${room.name}`
           })
         } else {
           Taro.navigateTo({
-            url: `/pages/settlement/settlement?id=${room.id}`
+            url: `/pages/settlement/settlement?roomId=${room.id}&roomName=${room.name}`
           })
         }
       }

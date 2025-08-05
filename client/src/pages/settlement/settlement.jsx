@@ -1,11 +1,12 @@
 import { View, Button, Text, ScrollView, Snapshot } from '@tarojs/components'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Taro from '@tarojs/taro'
 import PlayerAvatar from '../../components/player-avatar.js'
 import { GameService } from '../../services/gameService.js'
 import { useSettleRoom } from '../../hooks/useGraphQL.js'
 import { ShareService } from '../../services/shareService.js'
 import testScreenshot from '../../utils/testScreenshot.js'
+import { restClient } from '../../services/restClient.js'
 import './settlement.scss'
 
 // interface Player {
@@ -27,10 +28,11 @@ import './settlement.scss'
 // }
 
 export default function Settlement() {
-  // // 获取页面参数
-  // const router = Taro.getCurrentInstance().router
-  // const roomId = router?.params?.roomId || ''
-  // const roomName = router?.params?.roomName || ''
+  // 获取页面参数
+  const router = Taro.getCurrentInstance().router
+  const roomId = router?.params?.roomId || ''
+  const roomName = router?.params?.roomName || ''
+  console.log('roomId', roomId)
 
   // // 状态管理
   // const [settlementStrategy, setSettlementStrategy] = useState<SettlementStrategy[]>([])
@@ -185,26 +187,55 @@ export default function Settlement() {
   //   })
   // }
 
-  const rankings = [
-    {
-      rank: 1,
-      name: "玩家1",
-      amount: 100,
-      // icon: Crown,
-      color: "text-yellow-600",
-      bgColor: "bg-yellow-50",
-      borderColor: "border-yellow-200",
-    },
-    {
-      rank: 2,
-      name: "玩家2",
-      amount: -50,
-      // icon: Medal,
-      color: "text-gray-600",
-      bgColor: "bg-gray-50",
-      borderColor: "border-gray-200",
-    },
-  ]
+  const rank1Style = {
+    color: "text-yellow-600",
+    bgColor: "bg-yellow-50",
+    borderColor: "border-yellow-200",
+  }
+
+  const rank2Style = {
+    color: "text-gray-600",
+    bgColor: "bg-gray-50",
+    borderColor: "border-gray-200",
+  }
+
+  const [rankings, setRankings] = useState([])
+  // const getRoomDetail = async () => {
+  //   setLoading(true)
+  //   const result = await restClient.post("/api/get-room-detail", {
+  //     gameId: roomId,
+  //   });
+  //   console.log(result);
+  //   setRoommates(result.data.roommates)
+  //   setTransactions(result.data.transactions)
+  //   setLoading(false)
+  // }
+
+
+  useEffect(() => {
+    const getRankings = async () => {
+      const rankings = await restClient.post("/api/get-rankings", {
+        gameId: roomId,
+      });
+      const rankingsWithStyle = rankings.data.map((player, index) => {
+        return {
+          ...player,
+          ...(player.rank === 1 ? rank1Style : rank2Style),
+        }
+      })
+        setRankings(rankingsWithStyle)
+    }
+    getRankings()
+    
+  }, [])
+
+  const leaveRoom = useCallback(async () => {
+    const result = await restClient.post("/api/games/leave", {
+      gameId: roomId,
+    });
+    Taro.navigateTo({ url: '/pages/index/index' })
+  }, [roomId])
+
 
   return (
     <View className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
@@ -266,7 +297,7 @@ export default function Settlement() {
                           : "bg-red-100 text-red-800 border-red-200"
                       }`}
                     >
-                      ¥{player.amount}
+                      {player.amount}
                     </View>
                   </View>
                 </View>
@@ -286,7 +317,7 @@ export default function Settlement() {
             </Button>
 
             <Button
-              onClick={() => Taro.navigateTo({ url: '/pages/index/index' })}
+              onClick={() => leaveRoom()}
               className="w-full h-14 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-semibold shadow-lg text-lg"
             >
               {/* <LogOut className="h-5 w-5 mr-2" /> */}

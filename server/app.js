@@ -4,11 +4,11 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const jwt = require('jsonwebtoken');
-const axios = require('axios');
 const { Pool } = require('pg');
 const { GameServices, convertKeysToCamelCase } = require('./gameServices');
 const sseManager = require('./sse/sse_manager');
 const SSEEvent = require('./sse/sse_event');
+const { TransferEvent } = require('./sse/events');
 require('dotenv').config();
 
 // 创建Express应用
@@ -114,25 +114,19 @@ const startAutoCloseTask = () => {
 };
 
 // 发送交易通知的辅助函数
-const sendTransactionNotification = async (transactionData) => {
+const sendEventToClient = async (event) => {
   try {
-    const event = new SSEEvent('transaction', {
-      type: 'score_transaction',
-      data: transactionData,
-      timestamp: new Date().toISOString()
-    });
-    
     // 广播给所有连接的客户端
     sseManager.broadcast(event);
     
-    console.log('已发送交易通知:', transactionData);
+    console.log('已发送通知:', event);
   } catch (error) {
-    console.error('发送交易通知失败:', error);
+    console.error('发送通知失败:', error);  
   }
 };
 
 // 初始化游戏服务 - 传入数据库服务对象和通知回调
-const gameServices = new GameServices(dbService, sendTransactionNotification);
+const gameServices = new GameServices(dbService, sendEventToClient);
 
 // 中间件配置
 app.use(helmet()); // 安全头
@@ -579,7 +573,7 @@ app.post('/api/games/transfer', authenticateToken, async (req, res) => {
       gameId, 
       description
     );
-    
+
     res.json({
       success: true,
       transferId: result.transferId,
@@ -621,6 +615,16 @@ app.get('/api/get-rooms', authenticateToken, async (req, res) => {
 app.use((err, req, res, next) => {
   console.error('服务器错误:', err);
   res.status(500).json({ error: '服务器内部错误' });
+});
+
+app.post('/api/get-rankings', authenticateToken, async (req, res) => {
+  try {
+    const { gameId } = req.body;
+    const rankings = await gameServices.getRankings(gameId);
+    res.json(rankings);
+  } catch (error) {
+    console.error('获取排行榜错误:', error);
+  }
 });
 
 // 404处理

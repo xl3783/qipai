@@ -1,3 +1,5 @@
+const { JoinEvent, LeaveEvent, TransferEvent } = require('./sse/events');
+
 function snakeToCamel(str) {
     return str.replace(/_([a-z])/g, (_, group) => group.toUpperCase());
   }
@@ -55,8 +57,6 @@ function snakeToCamel(str) {
     
     return value;
   }
-  
-
 
 class GameServices {
     constructor(dbService, notificationCallback = null) {
@@ -300,22 +300,6 @@ class GameServices {
             throw new Error(`Game ${gameId} is full (max players: ${maxPlayers})`);
         }
 
-        //   // 获取玩家当前积分
-        //   let currentScore = 0;
-        //   const scoreResult = await client.query(
-        //     'SELECT current_total FROM scores WHERE player_id = $1 FOR UPDATE',
-        //     [playerId]
-        //   );
-
-        //   if (scoreResult.rows.length === 0) {
-        //     // 不存在积分则初始化
-        //     await client.query(
-        //       'INSERT INTO scores(player_id, current_total) VALUES ($1, $2)',
-        //       [playerId, 0]
-        //     );
-        //   } else {
-        //     currentScore = scoreResult.rows[0].current_total;
-        //   }
 
         // 重置为0（游戏开始时）
         let currentScore = 0;
@@ -341,6 +325,20 @@ class GameServices {
         RETURNING participation_id
       `, [gameId, playerId, currentScore, currentScore, position]);
 
+        // 查询用户信息
+        const playerInfo = await client.query(
+            'SELECT username, avatar_url FROM players WHERE player_id = $1',
+            [playerId]
+        );
+        const username = playerInfo.rows[0].username;
+        const avatarUrl = playerInfo.rows[0].avatar_url;
+
+        if (this.notificationCallback) {
+            const event = new JoinEvent(gameId, playerId, username, position, avatarUrl);
+            this.notificationCallback(event);
+        }
+
+
         return {
             participationId: participationResult.rows[0].participation_id,
             gameId: gameId,
@@ -358,6 +356,7 @@ class GameServices {
             await client.query('BEGIN');
 
             const res = await this._joinGame(client, gameName, playerId, position);
+
             console.log(res);
             await client.query('COMMIT');
             return res;
@@ -425,37 +424,6 @@ class GameServices {
       `, [playerId, gameId, pointsChange, newTotal, description]);
 
         const transactionId = transactionResult.rows[0].transaction_id;
-
-        // 如果有通知回调，发送交易通知
-        if (this.notificationCallback) {
-            try {
-                // 获取交易详情
-                const transactionDetail = await client.query(`
-                    SELECT st.*, p.username, g.game_name
-                    FROM score_transactions st
-                    LEFT JOIN players p ON st.player_id = p.player_id
-                    LEFT JOIN games g ON st.game_id = g.game_id
-                    WHERE st.transaction_id = $1
-                `, [transactionId]);
-
-                if (transactionDetail.rows.length > 0) {
-                    const transactionData = convertKeysToCamelCase(transactionDetail.rows[0]);
-                    await this.notificationCallback({
-                        transactionId: transactionData.transactionId,
-                        playerId: transactionData.playerId,
-                        playerName: transactionData.username,
-                        gameId: transactionData.gameId,
-                        gameName: transactionData.gameName,
-                        pointsChange: transactionData.pointsChange,
-                        currentTotal: transactionData.currentTotal,
-                        description: transactionData.description,
-                        eventTime: transactionData.eventTime
-                    });
-                }
-            } catch (error) {
-                console.error('发送交易通知失败:', error);
-            }
-        }
 
         return transactionId;
     }
@@ -527,39 +495,22 @@ class GameServices {
 
             // 如果有通知回调，发送转移通知
             if (this.notificationCallback) {
-                try {
-                    // 获取转移详情
-                    const transferDetail = await client.query(`
-                        SELECT tr.*, 
-                               p1.username as from_username,
-                               p2.username as to_username,
-                               g.game_name
-                        FROM transfer_records tr
-                        LEFT JOIN players p1 ON tr.from_player_id = p1.player_id
-                        LEFT JOIN players p2 ON tr.to_player_id = p2.player_id
-                        LEFT JOIN games g ON tr.game_id = g.game_id
-                        WHERE tr.transfer_id = $1
-                    `, [transferId]);
 
-                    if (transferDetail.rows.length > 0) {
-                        const transferData = convertKeysToCamelCase(transferDetail.rows[0]);
-                        await this.notificationCallback({
-                            type: 'transfer',
-                            transferId: transferData.transferId,
-                            fromPlayerId: transferData.fromPlayerId,
-                            fromPlayerName: transferData.fromUsername,
-                            toPlayerId: transferData.toPlayerId,
-                            toPlayerName: transferData.toUsername,
-                            gameId: transferData.gameId,
-                            gameName: transferData.gameName,
-                            points: transferData.points,
-                            description: transferData.description,
-                            eventTime: transferData.eventTime
-                        });
-                    }
-                } catch (error) {
-                    console.error('发送转移通知失败:', error);
-                }
+                // 查询用户信息
+                const fromPlayer = await client.query(
+                    'SELECT username FROM players WHERE player_id = $1',
+                    [fromPlayerId]
+                );
+                const toPlayer = await client.query(
+                    'SELECT username FROM players WHERE player_id = $1',
+                    [toPlayerId]
+                );
+
+                const fromPlayerName = fromPlayer.rows[0].username;
+                const toPlayerName = toPlayer.rows[0].username;
+
+                const event = new TransferEvent(fromPlayerName, toPlayerName, points, description);
+                this.notificationCallback(event);
             }
 
             await client.query('COMMIT');
@@ -746,6 +697,19 @@ class GameServices {
 
     // 离开游戏
     async leaveGame(gameId, playerId) {
+
+        // 查询用户信息
+        const playerInfo = await client.query(
+            'SELECT username, avatar_url FROM players WHERE player_id = $1',
+            [playerId]
+        );
+        const username = playerInfo.rows[0].username;
+
+        if (this.notificationCallback) {
+            const event = new LeaveEvent(gameId, playerId, username);
+            this.notificationCallback(event);
+        }
+
         return await this.updateParticipantStatus(gameId, playerId, 'left', 'Player left the game');
     }
 
@@ -1055,6 +1019,19 @@ class GameServices {
             roommates: roommates,
             transactions: transactions
         };
+    }
+
+    async getRankings(gameId) {
+        console.log('getRankings', gameId);
+        const result = await this.pool.query(`
+            SELECT p.username as name, gp.final_score as amount, row_number() OVER (ORDER BY gp.final_score DESC) AS rank
+            FROM game_participants gp
+            left join players p on gp.player_id = p.player_id
+            WHERE gp.game_id = $1
+            ORDER BY gp.final_score DESC
+        `, [gameId]);
+        console.log('result', result.rows);
+        return convertKeysToCamelCase(result.rows);
     }
 }
 

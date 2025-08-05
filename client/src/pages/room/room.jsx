@@ -210,7 +210,7 @@ export default function Room() {
             创建房间
           </Button> */}
           <Button
-            onClick={() => Taro.navigateTo({ url: '/pages/settlement/settlement?roomId=123&roomName=测试房间' })}
+            onClick={() => Taro.navigateTo({ url: `/pages/settlement/settlement?roomId=${roomId}&roomName=${roomName}` })}
             className="w-full h-14 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-semibold shadow-lg text-lg"
           >
             结算
