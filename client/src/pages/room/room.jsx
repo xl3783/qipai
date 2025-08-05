@@ -12,6 +12,7 @@ import QRCodeModal from '../../components/qr-code-modal.js'
 import { Icons } from '../../components/icons.jsx'
 import ModalDialog from '../../components/modal-dialog.jsx'
 import { restClient } from '../../services/restClient.js'
+import socketService from '../../services/socketService.js'
 
 export default function Room() {
   // 获取页面参数
@@ -100,18 +101,77 @@ export default function Room() {
   const [roommates, setRoommates] = useState([])
   const [transactions, setTransactions] = useState([])
 
-  useEffect(() => {
-    const getRoomDetail = async () => {
-      setLoading(true)
+  // 获取房间详情
+  const getRoomDetail = useCallback(async () => {
+    setLoading(true)
+    try {
       const result = await restClient.post("/api/get-room-detail", {
         gameId: roomId,
       });
       console.log(result);
       setRoommates(result.data.roommates)
       setTransactions(result.data.transactions)
+    } catch (error) {
+      console.error('获取房间详情失败:', error);
+    } finally {
       setLoading(false)
     }
+  }, [roomId]);
+
+  // 初始化WebSocket连接和房间监听
+  useEffect(() => {
+    // 获取token
+    const token = Taro.getStorageSync('token');
+    if (!token) {
+      console.error('缺少认证token，无法连接WebSocket');
+      Taro.showToast({
+        title: '请先登录',
+        icon: 'error',
+        duration: 2000
+      });
+      return;
+    }
+    
+    // 连接WebSocket
+    socketService.connect('http://localhost:3000', token);
+    
+    // 加入房间
+    socketService.joinRoom(roomId);
+    
+    // 监听房间更新
+    socketService.onRoomUpdate((data) => {
+      console.log('收到房间更新:', data);
+      
+      if (data.roomDetail) {
+        setRoommates(data.roomDetail.roommates || []);
+        setTransactions(data.roomDetail.transactions || []);
+      }
+      
+      // 显示转账通知
+      if (data.type === 'transfer') {
+        Taro.showToast({
+          title: `转账成功: ${data.transfer.from} → ${data.transfer.to} ${data.transfer.points}`,
+          icon: 'success',
+          duration: 3000
+        });
+      }
+    });
+
+    // 初始加载房间数据
     getRoomDetail();
+
+    // 清理函数
+    return () => {
+      socketService.leaveRoom();
+      socketService.offRoomUpdate();
+    };
+  }, [roomId, getRoomDetail]);
+
+  // 页面卸载时断开WebSocket连接
+  useEffect(() => {
+    return () => {
+      socketService.disconnect();
+    };
   }, []);
 
   const leftRoom = useCallback(async () => {
@@ -120,6 +180,10 @@ export default function Room() {
         gameId: roomId,
       });
       console.log(result);
+      
+      // 离开WebSocket房间
+      socketService.leaveRoom();
+      
       Taro.navigateTo({
         url: '/pages/index/index',
       });
@@ -127,6 +191,38 @@ export default function Room() {
       console.error(error);
     }
   }, [roomId])
+
+  // 处理转账
+  const handleTransfer = useCallback(async (fromPlayerId, toPlayerId, amount, description) => {
+    try {
+      const result = await restClient.post("/api/games/transfer", {
+        gameId: roomId,
+        from: fromPlayerId,
+        to: toPlayerId,
+        points: amount,
+        description: description || '转账'
+      });
+      
+      console.log('转账成功:', result);
+      
+      // 关闭转账模态框
+      setShowTransferModal(false);
+      
+      // 转账成功后，WebSocket会自动更新房间数据
+      Taro.showToast({
+        title: '转账成功',
+        icon: 'success',
+        duration: 2000
+      });
+    } catch (error) {
+      console.error('转账失败:', error);
+      Taro.showToast({
+        title: '转账失败',
+        icon: 'error',
+        duration: 2000
+      });
+    }
+  }, [roomId]);
 
   if (loading) {
     return (
@@ -163,12 +259,6 @@ export default function Room() {
                   className="flex flex-col items-center p-3 rounded-xl bg-gradient-to-br from-blue-50 to-purple-50 border border-blue-100"
                   onClick={() => setShowTransferModal(true)}
                 >
-                  {/* <Avatar className="h-12 w-12 mb-2 ring-2 ring-white shadow-md">
-                    <AvatarImage src={roommate.avatar || "/placeholder.svg"} alt={roommate.name} />
-                    <AvatarFallback className="bg-blue-500 text-white font-semibold text-sm">
-                      {roommate.name.charAt(0)}
-                    </AvatarFallback>
-                  </Avatar> */}
                   <View className="font-semibold text-gray-900 mb-1 text-sm">{roommate.name}</View>
                   <View className="bg-green-100 text-green-800 font-semibold px-2 py-1 text-xs">
                     {roommate.balance}
@@ -204,11 +294,6 @@ export default function Room() {
 
         {/* Action Buttons */}
         <View className="grid grid-cols-2 gap-4">
-          {/* <Button
-            className="w-full h-14 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold shadow-lg"
-          >
-            创建房间
-          </Button> */}
           <Button
             onClick={() => Taro.navigateTo({ url: `/pages/settlement/settlement?roomId=${roomId}&roomName=${roomName}` })}
             className="w-full h-14 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-semibold shadow-lg text-lg"
@@ -222,116 +307,39 @@ export default function Room() {
             离开
           </Button>
         </View>
-      </View>
-      <ModalDialog
-        isOpen={showTransferModal}
-        onClose={() => setShowTransferModal(false)}
-        title="转入"
-      >
-        <Input
-          type="number"
-          placeholder="请输入金额"
-          className='border border-gray-300 rounded-md p-2 w-full'
-          onChange={(e) => setTransferAmount(e.target.value)}
-        />
-      </ModalDialog>
-    </View>
-  )
-
-  return (
-    <View className="room-page">
-      {/* Header */}
-      <View className="room-header">
-        <View className="room-header-title">
-          <View>房间: {roomName}</View>
-        </View>
-      </View>
-      {/* Notice Bar */}
-      <View className="room-notice">
-        <View>退房/重开 需要先点结算归零数据</View>
-      </View>
-      {/* 内容区：好友+流水，底部加padding防止被按钮遮挡 */}
-      <View className="room-content">
-        {/* 好友区 */}
-        <View className="room-players">
-          {roomPlayers.map((player) => (
-            <View key={player.participationId} className="room-player-item">
-              <TaroButton onClick={() => handleChoosePlayer(player)} className="room-player-btn">
-                <PlayerAvatar name={player.playerByPlayerId.username} size="lg" />
-                <View className="room-player-name">{player.playerByPlayerId.username}</View>
-                <View className="room-player-score">¥{player.finalScore}</View>
-              </TaroButton>
-            </View>
-          ))}
-          {/* 可加“添加好友”按钮 */}
-          {/* <View className="room-player-item">
-            <TaroButton className="room-player-btn"
-              onClick={handleShareRoom}
+        
+        {/* 测试按钮 - 开发环境使用 */}
+        {process.env.NODE_ENV === 'development' && (
+          <View className="mt-4">
+            <Button
+              onClick={() => {
+                console.log('测试WebSocket连接...');
+                console.log('当前房间ID:', roomId);
+                console.log('当前用户ID:', Taro.getStorageSync('userId'));
+                console.log('WebSocket连接状态:', socketService.isConnected());
+              }}
+              className="w-full h-10 bg-blue-500 text-white text-sm"
             >
-              <View className="room-player-avatar-add">
-                <Icons.Plus size={24} color="#6B7280" />
-              </View>
-              <View className="room-player-name">添加好友</View>
-            </TaroButton>
-          </View> */}
-        </View>
-        {/* 流水区 */}
-        <View className="room-history">
-          <TransactionHistory transactions={transactions} />
-        </View>
+              测试WebSocket连接
+            </Button>
+          </View>
+        )}
       </View>
-      {/* 底部按钮栏，假定高度56px */}
-      <View className="room-footer">
-        <View className="room-footer-btns">
-          <TaroButton 
-            onClick={handleShowTransferModal} 
-            className="room-footer-btn room-footer-btn-transfer"
-          >
-            转账
-          </TaroButton>
-          <TaroButton 
-            onClick={handleNavigateToSettlement} 
-            className="room-footer-btn room-footer-btn-settle"
-          >
-            结算
-          </TaroButton>
-          <TaroButton 
-            onClick={handleExitRoom}
-            className="room-footer-btn room-footer-btn-exit"
-          >
-            退房
-          </TaroButton>
-        </View>
-      </View>
-      {/* Modals */}
-      <PlayerProfileModal
-        isOpen={showProfileModal}
-        onClose={handleCloseProfileModal}
-        player={choosePlayerProfile}
-        onUpdateNickname={() => {}}
-        onExitRoom={handleExitRoom}
-      />
-      <SpendingLimitModal
-        isOpen={showSpendingModal}
-        onClose={() => {}}
-        onConfirm={() => {}}
-      />
+      
+      {/* 转账模态框 */}
       <TransferModal
         isOpen={showTransferModal}
-        onClose={handleCloseTransferModal}
-        players={roomPlayers.map(player => ({
-          id: player.playerId,
-          username: player.playerByPlayerId.username,
-          avatarUrl: player.playerByPlayerId.avatarUrl
+        onClose={() => setShowTransferModal(false)}
+        players={roommates.map(roommate => ({
+          id: roommate.id,
+          username: roommate.name,
+          avatarUrl: roommate.avatar
         }))}
-        currentPlayer={getCurrentUser()}
+        currentPlayer={{
+          id: socketService.getCurrentUserId() || Taro.getStorageSync('userId'),
+          username: '当前用户'
+        }}
         onTransfer={handleTransfer}
-      />
-      <QRCodeModal
-        isOpen={shareRoom}
-        onClose={() => setShareRoom(false)}
-        roomId={roomId}
-        roomName={roomName}
       />
     </View>
   )

@@ -1,3 +1,4 @@
+
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -9,11 +10,15 @@ const { GameServices, convertKeysToCamelCase } = require('./gameServices');
 const sseManager = require('./sse/sse_manager');
 const SSEEvent = require('./sse/sse_event');
 const { TransferEvent } = require('./sse/events');
+const expressWs = require('express-ws');
 require('dotenv').config();
 
 // 创建Express应用
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// 初始化express-ws
+const wsInstance = expressWs(app);
 
 // 数据库连接配置
 const pool = new Pool({
@@ -56,6 +61,56 @@ const dbService = {
     } finally {
       client.release();
     }
+  }
+};
+
+// WebSocket连接管理
+const socketManager = {
+  // 存储房间连接
+  roomConnections: new Map(),
+  
+  // 添加连接到房间
+  joinRoom(socketId, roomId) {
+    if (!this.roomConnections.has(roomId)) {
+      this.roomConnections.set(roomId, new Set());
+    }
+    this.roomConnections.get(roomId).add(socketId);
+    console.log(`用户 ${socketId} 加入房间 ${roomId}`);
+  },
+  
+  // 从房间移除连接
+  leaveRoom(socketId, roomId) {
+    const room = this.roomConnections.get(roomId);
+    if (room) {
+      room.delete(socketId);
+      if (room.size === 0) {
+        this.roomConnections.delete(roomId);
+      }
+      console.log(`用户 ${socketId} 离开房间 ${roomId}`);
+    }
+  },
+  
+  // 向房间广播消息
+  broadcastToRoom(roomId, event, data) {
+    const room = this.roomConnections.get(roomId);
+    if (room) {
+      const message = JSON.stringify({ event, data });
+      room.forEach(socketId => {
+        // 向房间内的所有客户端发送消息
+        wsInstance.getWss().clients.forEach(client => {
+          if (client.readyState === 1 && client.socketId === socketId) { // 1 means 'OPEN'
+            client.send(message);
+          }
+        });
+      });
+      console.log(`向房间 ${roomId} 广播事件 ${event}`);
+    }
+  },
+  
+  // 获取房间连接数
+  getRoomConnectionCount(roomId) {
+    const room = this.roomConnections.get(roomId);
+    return room ? room.size : 0;
   }
 };
 
@@ -121,7 +176,7 @@ const sendEventToClient = async (event) => {
     
     console.log('已发送通知:', event);
   } catch (error) {
-    console.error('发送通知失败:', error);  
+    console.error('发送通知失败:', error.message);  
   }
 };
 
@@ -556,23 +611,39 @@ app.post('/api/games/end', authenticateToken, async (req, res) => {
 
 app.post('/api/games/transfer', authenticateToken, async (req, res) => {
   try {
-    const { gameId, to, points, description } = req.body;
+    const { gameId, from, to, points, description } = req.body;
     const { userId } = req.user;
 
-    let from = userId;
+    // 如果没有指定from，使用当前用户ID
+    const fromPlayerId = from || userId;
     
-    // // 验证权限（只能转移自己的积分或管理员）
-    // if (from !== userId && req.user.role !== 'admin') {
-    //   return res.status(403).json({ error: '权限不足' });
-    // }
+    // 验证权限（只能转移自己的积分或管理员）
+    if (fromPlayerId !== userId && req.user.role !== 'admin') {
+      return res.status(403).json({ error: '权限不足' });
+    }
     
     const result = await gameServices.transferPointsBetweenPlayers(
-      from, 
+      fromPlayerId, 
       to, 
       points, 
       gameId, 
       description
     );
+
+    // 获取最新的房间详情
+    const roomDetail = await gameServices.getRoomDetail(gameId);
+    
+    // 通过WebSocket广播房间更新
+    socketManager.broadcastToRoom(gameId, 'room-updated', {
+      type: 'transfer',
+      roomDetail: roomDetail,
+      transfer: {
+        from: fromPlayerId,
+        to: to,
+        points: points,
+        description: description
+      }
+    });
 
     res.json({
       success: true,
@@ -635,12 +706,111 @@ app.use('*', (req, res) => {
 // 导出app和数据库服务，以便其他模块使用
 module.exports = { app, dbService, pool };
 
+// WebSocket路由处理
+app.ws('/ws', (ws, req) => {
+  console.log(`WebSocket连接建立: ${req.url}`);
+  
+  // 从多种方式获取token
+  let token = null;
+  
+  // 1. 从URL查询参数获取
+  const url = new URL(req.url, `http://${req.headers.host}`);
+  token = url.searchParams.get('token');
+  
+  // 2. 从Authorization header获取
+  if (!token) {
+    const authHeader = req.headers['authorization'];
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.substring(7);
+    }
+  }
+  
+  console.log('获取到的token:', token ? '存在' : '不存在');
+  
+  if (!token) {
+    console.log('WebSocket连接缺少token，拒绝连接');
+    ws.close(1008, 'Missing authentication token');
+    return;
+  }
+  
+  // 验证token
+  try {
+    const user = jwt.verify(token, process.env.JWT_SECRET);
+    console.log(`WebSocket连接认证成功，用户: ${user.userId}`);
+    
+    // 为每个连接生成唯一ID
+    ws.socketId = Math.random().toString(36).substr(2, 9);
+    ws.roomId = null;
+    ws.userId = user.userId;
+    ws.user = user;
+    
+    // 发送认证成功消息
+    ws.send(JSON.stringify({
+      type: 'auth-success',
+      userId: user.userId,
+      message: '认证成功'
+    }));
+    
+    // 处理消息
+    ws.on('message', (msg) => {
+      try {
+        const data = JSON.parse(msg);
+        console.log('收到WebSocket消息:', data);
+        
+        switch (data.type) {
+          case 'join-room':
+            ws.roomId = data.roomId;
+            socketManager.joinRoom(ws.socketId, data.roomId);
+            ws.send(JSON.stringify({
+              type: 'joined-room',
+              roomId: data.roomId,
+              userId: ws.userId
+            }));
+            console.log(`用户 ${ws.userId} 加入房间 ${data.roomId}`);
+            break;
+            
+          case 'leave-room':
+            if (ws.roomId) {
+              socketManager.leaveRoom(ws.socketId, ws.roomId);
+              ws.roomId = null;
+            }
+            console.log(`用户 ${ws.userId} 离开房间`);
+            break;
+            
+          default:
+            console.log('未知消息类型:', data.type);
+        }
+      } catch (error) {
+        console.error('处理WebSocket消息错误:', error);
+      }
+    });
+    
+    // 处理连接关闭
+    ws.on('close', () => {
+      console.log(`WebSocket连接关闭: ${ws.socketId}, 用户: ${ws.userId}`);
+      if (ws.roomId) {
+        socketManager.leaveRoom(ws.socketId, ws.roomId);
+      }
+    });
+    
+    // 处理错误
+    ws.on('error', (error) => {
+      console.error('WebSocket错误:', error);
+    });
+    
+  } catch (err) {
+    console.log('WebSocket连接token无效，拒绝连接:', err.message);
+    ws.close(1008, 'Invalid authentication token');
+  }
+});
+
 // 只在非测试环境下启动服务器
 if (process.env.NODE_ENV !== 'test') {
   // 启动服务器
   app.listen(PORT, () => {
     console.log(`服务器运行在端口 ${PORT}`);
     console.log(`环境: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`WebSocket服务器已启动`);
     
     // 启动自动关闭超时房间的定时任务
     startAutoCloseTask();
