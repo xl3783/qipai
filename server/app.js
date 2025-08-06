@@ -6,7 +6,7 @@ const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const jwt = require('jsonwebtoken');
 const { Pool } = require('pg');
-const { GameServices, convertKeysToCamelCase } = require('./gameServices');
+const { RoomServices, convertKeysToCamelCase } = require('./roomServices');
 const sseManager = require('./sse/sse_manager');
 const SSEEvent = require('./sse/sse_event');
 const { TransferEvent } = require('./sse/events');
@@ -144,7 +144,7 @@ const autoCloseInactiveRooms = async () => {
     // 批量关闭超时房间
     for (const game of inactiveGames.rows) {
       try {
-        await gameServices.endGame(game.game_id);
+        await roomServices.endGame(game.game_id);
         console.log(`已自动关闭房间: ${game.game_name} (ID: ${game.game_id})`);
       } catch (error) {
         console.error(`关闭房间 ${game.game_name} (ID: ${game.game_id}) 失败:`, error.message);
@@ -180,8 +180,22 @@ const sendEventToClient = async (event) => {
   }
 };
 
+const broadcast = async (event) => {
+  try {
+    const message = JSON.stringify(event);
+    // 广播给所有连接的客户端
+    wsInstance.getWss().clients.forEach(client => {
+      if (client.readyState === 1) { // 1 means 'OPEN'
+        client.send(message);
+      }
+    });
+  } catch (error) {
+    console.error('发送通知失败:', error.message);  
+  }
+};
+
 // 初始化游戏服务 - 传入数据库服务对象和通知回调
-const gameServices = new GameServices(dbService, sendEventToClient);
+const roomServices = new RoomServices(dbService, broadcast);
 
 // 中间件配置
 app.use(helmet()); // 安全头
@@ -192,6 +206,104 @@ app.use(cors({
 app.use(morgan('combined')); // 日志
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
+// WebSocket路由处理
+app.ws('/ws', (ws, req) => {
+  console.log(`WebSocket连接建立: ${req.url}`);
+
+  // 从多种方式获取token
+  let token = null;
+
+  // 1. 从URL查询参数获取
+  const url = new URL(req.url, `http://${req.headers.host}`);
+  token = url.searchParams.get('token');
+
+  // 2. 从Authorization header获取
+  if (!token) {
+    const authHeader = req.headers['authorization'];
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.substring(7);
+    }
+  }
+
+  console.log('获取到的token:', token ? '存在' : '不存在');
+
+  if (!token) {
+    console.log('WebSocket连接缺少token，拒绝连接');
+    ws.close(1008, 'Missing authentication token');
+    return;
+  }
+
+  // 验证token
+  try {
+    const user = jwt.verify(token, process.env.JWT_SECRET);
+    console.log(`WebSocket连接认证成功，用户: ${user.userId}`);
+    console.log(ws.socketId);
+    // 为每个连接生成唯一ID
+    ws.socketId = Math.random().toString(36).substr(2, 9);
+    ws.roomId = null;
+    ws.userId = user.userId;
+    ws.user = user;
+
+    // 发送认证成功消息
+    ws.send(JSON.stringify({
+      type: 'auth-success',
+      userId: user.userId,
+      message: '认证成功'
+    }));
+
+    // 处理消息
+    ws.on('message', (msg) => {
+      try {
+        const data = JSON.parse(msg);
+        console.log('收到WebSocket消息:', data);
+
+        switch (data.type) {
+          case 'join-room':
+            ws.roomId = data.roomId;
+            socketManager.joinRoom(ws.socketId, data.roomId);
+            ws.send(JSON.stringify({
+              type: 'joined-room',
+              roomId: data.roomId,
+              userId: ws.userId
+            }));
+            console.log(`用户 ${ws.userId} 加入房间 ${data.roomId}`);
+            break;
+
+          case 'leave-room':
+            if (ws.roomId) {
+              socketManager.leaveRoom(ws.socketId, ws.roomId);
+              ws.roomId = null;
+            }
+            console.log(`用户 ${ws.userId} 离开房间`);
+            break;
+
+          default:
+            console.log('未知消息类型:', data.type);
+        }
+      } catch (error) {
+        console.error('处理WebSocket消息错误:', error);
+      }
+    });
+
+    // 处理连接关闭
+    ws.on('close', () => {
+      console.log(`WebSocket连接关闭: ${ws.socketId}, 用户: ${ws.userId}`);
+      if (ws.roomId) {
+        socketManager.leaveRoom(ws.socketId, ws.roomId);
+      }
+    });
+
+    // 处理错误
+    ws.on('error', (error) => {
+      console.error('WebSocket错误:', error);
+    });
+
+  } catch (err) {
+    console.log('WebSocket连接token无效，拒绝连接:', err.message);
+    ws.close(1008, 'Invalid authentication token');
+  }
+});
+
 
 // 速率限制
 const limiter = rateLimit({
@@ -253,6 +365,10 @@ app.get('/health', (req, res) => {
     timestamp: new Date().toISOString(),
     database: pool.totalCount > 0 ? 'connected' : 'disconnected'
   });
+});
+
+app.get('/broadcast', (req, res) => {
+  
 });
 
 // SSE连接端点
@@ -348,7 +464,7 @@ app.post('/api/wechat-login', async (req, res) => {
     }
     
     // 3. 调用游戏服务处理登录
-    const loginResult = await gameServices.loginWithWechat(openid, userInfo?.nickName || '');
+    const loginResult = await roomServices.loginWithWechat(openid, userInfo?.nickName || '');
     
     if (!loginResult) {
       return res.status(500).json({ error: '用户登录失败' });
@@ -382,7 +498,7 @@ app.get('/api/players/profile', authenticateToken, async (req, res) => {
   try {
     const { userId } = req.user;
 
-    const result  = await gameServices.getPlayerProfile(userId);
+    const result  = await roomServices.getPlayerProfile(userId);
     
     res.json(result);
   } catch (error) {
@@ -442,7 +558,7 @@ app.post('/api/games/create', authenticateToken, async (req, res) => {
     const { userId } = req.user;
     
     // 调用游戏服务创建游戏房间
-    const gameInfo = await gameServices.createGameRoom(userId);
+    const gameInfo = await roomServices.createGameRoom(userId);
     
     res.json({ 
       gameId: gameInfo.gameId,
@@ -471,7 +587,7 @@ app.post('/api/scores/transaction', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: '权限不足' });
     }
     
-    const transactionId = await gameServices.updatePlayerScore(player_id, game_id, points_change, description);
+    const transactionId = await roomServices.updatePlayerScore(player_id, game_id, points_change, description);
     
     res.json({
       success: true,
@@ -489,7 +605,7 @@ app.get('/api/scores/history/:playerId', authenticateToken, async (req, res) => 
     const { playerId } = req.params;
     const { limit = 50 } = req.query;
     
-    const history = await gameServices.getScoreHistory(playerId, parseInt(limit));
+    const history = await roomServices.getScoreHistory(playerId, parseInt(limit));
     
     res.json(history);
   } catch (error) {
@@ -503,7 +619,7 @@ app.get('/api/leaderboard', async (req, res) => {
   try {
     const { limit = 10 } = req.query;
     
-    const leaderboard = await gameServices.getLeaderboard(parseInt(limit));
+    const leaderboard = await roomServices.getLeaderboard(parseInt(limit));
     
     res.json(leaderboard);
   } catch (error) {
@@ -521,7 +637,7 @@ app.post('/api/games/join', authenticateToken, async (req, res) => {
 
     console.log(gameName, userId, position);
     
-    const joinResult = await gameServices.joinGame(gameName, userId, position);
+    const joinResult = await roomServices.joinGame(gameName, userId, position);
     console.log(joinResult);
     res.json({
       success: true,
@@ -544,7 +660,7 @@ app.post('/api/games/leave', authenticateToken, async (req, res) => {
     const { gameId } = req.body;
     const { userId } = req.user;
     
-    const result = await gameServices.leaveGame(gameId, userId);
+    const result = await roomServices.leaveGame(gameId, userId);
     
     res.json({
       success: true,
@@ -561,7 +677,7 @@ app.post('/api/players/update', authenticateToken, async (req, res) => {
     const { userId } = req.user;
     const { username, phone, email, avatarUrl } = req.body;
 
-    const result = await gameServices.updatePlayer(userId, username, phone, email, avatarUrl);
+    const result = await roomServices.updatePlayer(userId, username, phone, email, avatarUrl);
 
     res.json({
       success: true,
@@ -579,7 +695,7 @@ app.post('/api/games/end', authenticateToken, async (req, res) => {
     const { userId } = req.user;
     
     // 检查权限（只有游戏创建者或管理员可以结束游戏）
-    const gameInfo = await gameServices.getGameInfo(gameId);
+    const gameInfo = await roomServices.getGameInfo(gameId);
     if (!gameInfo) {
       return res.status(404).json({ error: '游戏不存在' });
     }
@@ -588,7 +704,7 @@ app.post('/api/games/end', authenticateToken, async (req, res) => {
     //   return res.status(403).json({ error: '权限不足' });
     // }
     
-    await gameServices.endGame(gameId);
+    await roomServices.endGame(gameId);
     
     // 发送游戏结束通知
     await sendGameStatusNotification({
@@ -622,7 +738,7 @@ app.post('/api/games/transfer', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: '权限不足' });
     }
     
-    const result = await gameServices.transferPointsBetweenPlayers(
+    const result = await roomServices.transferPointsBetweenPlayers(
       fromPlayerId, 
       to, 
       points, 
@@ -631,7 +747,7 @@ app.post('/api/games/transfer', authenticateToken, async (req, res) => {
     );
 
     // 获取最新的房间详情
-    const roomDetail = await gameServices.getRoomDetail(gameId);
+    const roomDetail = await roomServices.getRoomDetail(gameId);
     
     // 通过WebSocket广播房间更新
     socketManager.broadcastToRoom(gameId, 'room-updated', {
@@ -661,7 +777,7 @@ app.post('/api/get-room-detail', authenticateToken, async (req, res) => {
   try {
     const { gameId } = req.body;
     console.log(gameId);
-    const roomDetail = await gameServices.getRoomDetail(gameId);
+    const roomDetail = await roomServices.getRoomDetail(gameId);
     console.log(roomDetail);
     res.json(roomDetail);
   } catch (error) {
@@ -673,7 +789,7 @@ app.get('/api/get-rooms', authenticateToken, async (req, res) => {
   try {
     const { userId } = req.user;
     console.log(userId);
-    const games = await gameServices.getRooms(userId);
+    const games = await roomServices.getRooms(userId);
     console.log(games);
     // js 下划线转驼峰工具
     res.json(games);
@@ -691,7 +807,7 @@ app.use((err, req, res, next) => {
 app.post('/api/get-rankings', authenticateToken, async (req, res) => {
   try {
     const { gameId } = req.body;
-    const rankings = await gameServices.getRankings(gameId);
+    const rankings = await roomServices.getRankings(gameId);
     res.json(rankings);
   } catch (error) {
     console.error('获取排行榜错误:', error);
@@ -706,103 +822,6 @@ app.use('*', (req, res) => {
 // 导出app和数据库服务，以便其他模块使用
 module.exports = { app, dbService, pool };
 
-// WebSocket路由处理
-app.ws('/ws', (ws, req) => {
-  console.log(`WebSocket连接建立: ${req.url}`);
-  
-  // 从多种方式获取token
-  let token = null;
-  
-  // 1. 从URL查询参数获取
-  const url = new URL(req.url, `http://${req.headers.host}`);
-  token = url.searchParams.get('token');
-  
-  // 2. 从Authorization header获取
-  if (!token) {
-    const authHeader = req.headers['authorization'];
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      token = authHeader.substring(7);
-    }
-  }
-  
-  console.log('获取到的token:', token ? '存在' : '不存在');
-  
-  if (!token) {
-    console.log('WebSocket连接缺少token，拒绝连接');
-    ws.close(1008, 'Missing authentication token');
-    return;
-  }
-  
-  // 验证token
-  try {
-    const user = jwt.verify(token, process.env.JWT_SECRET);
-    console.log(`WebSocket连接认证成功，用户: ${user.userId}`);
-    
-    // 为每个连接生成唯一ID
-    ws.socketId = Math.random().toString(36).substr(2, 9);
-    ws.roomId = null;
-    ws.userId = user.userId;
-    ws.user = user;
-    
-    // 发送认证成功消息
-    ws.send(JSON.stringify({
-      type: 'auth-success',
-      userId: user.userId,
-      message: '认证成功'
-    }));
-    
-    // 处理消息
-    ws.on('message', (msg) => {
-      try {
-        const data = JSON.parse(msg);
-        console.log('收到WebSocket消息:', data);
-        
-        switch (data.type) {
-          case 'join-room':
-            ws.roomId = data.roomId;
-            socketManager.joinRoom(ws.socketId, data.roomId);
-            ws.send(JSON.stringify({
-              type: 'joined-room',
-              roomId: data.roomId,
-              userId: ws.userId
-            }));
-            console.log(`用户 ${ws.userId} 加入房间 ${data.roomId}`);
-            break;
-            
-          case 'leave-room':
-            if (ws.roomId) {
-              socketManager.leaveRoom(ws.socketId, ws.roomId);
-              ws.roomId = null;
-            }
-            console.log(`用户 ${ws.userId} 离开房间`);
-            break;
-            
-          default:
-            console.log('未知消息类型:', data.type);
-        }
-      } catch (error) {
-        console.error('处理WebSocket消息错误:', error);
-      }
-    });
-    
-    // 处理连接关闭
-    ws.on('close', () => {
-      console.log(`WebSocket连接关闭: ${ws.socketId}, 用户: ${ws.userId}`);
-      if (ws.roomId) {
-        socketManager.leaveRoom(ws.socketId, ws.roomId);
-      }
-    });
-    
-    // 处理错误
-    ws.on('error', (error) => {
-      console.error('WebSocket错误:', error);
-    });
-    
-  } catch (err) {
-    console.log('WebSocket连接token无效，拒绝连接:', err.message);
-    ws.close(1008, 'Invalid authentication token');
-  }
-});
 
 // 只在非测试环境下启动服务器
 if (process.env.NODE_ENV !== 'test') {

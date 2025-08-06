@@ -58,7 +58,7 @@ function snakeToCamel(str) {
     return value;
   }
 
-class GameServices {
+class RoomServices {
     constructor(dbService, notificationCallback = null) {
         this.dbService = dbService;
         this.pool = dbService.pool;
@@ -334,7 +334,7 @@ class GameServices {
         const avatarUrl = playerInfo.rows[0].avatar_url;
 
         if (this.notificationCallback) {
-            const event = new JoinEvent(gameId, playerId, username, position, avatarUrl);
+            const event = new JoinEvent(playerId, gameId, playerId, username, position, avatarUrl);
             this.notificationCallback(event);
         }
 
@@ -509,7 +509,7 @@ class GameServices {
                 const fromPlayerName = fromPlayer.rows[0].username;
                 const toPlayerName = toPlayer.rows[0].username;
 
-                const event = new TransferEvent(fromPlayerName, toPlayerName, points, description);
+                const event = new TransferEvent(transferId, fromPlayerName, toPlayerName, points, description);
                 this.notificationCallback(event);
             }
 
@@ -706,7 +706,7 @@ class GameServices {
         const username = playerInfo.rows[0].username;
 
         if (this.notificationCallback) {
-            const event = new LeaveEvent(gameId, playerId, username);
+            const event = new LeaveEvent(playerId, gameId, playerId, username);
             this.notificationCallback(event);
         }
 
@@ -1009,6 +1009,7 @@ class GameServices {
         }));
 
         const transactions = transferRecords.rows.map(transferRecord => ({
+            id: transferRecord.transfer_id,
             from: transferRecord.from_player_name,
             to: transferRecord.to_player_name,
             amount: transferRecord.amount,
@@ -1035,4 +1036,4 @@ class GameServices {
     }
 }
 
-module.exports = { GameServices, convertKeysToCamelCase }; 
+module.exports = { RoomServices: RoomServices, convertKeysToCamelCase };

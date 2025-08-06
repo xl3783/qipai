@@ -133,10 +133,10 @@ export default function Room() {
     }
     
     // 连接WebSocket
-    socketService.connect('http://localhost:3000', token);
+    socketService.connect();
     
     // 加入房间
-    socketService.joinRoom(roomId);
+    // socketService.joinRoom(roomId);
     
     // 监听房间更新
     socketService.onRoomUpdate((data) => {
