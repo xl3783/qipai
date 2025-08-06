@@ -494,7 +494,10 @@ class RoomServices {
             const transferId = transferResult.rows[0].transfer_id;
 
             // 如果有通知回调，发送转移通知
+            console.log("start send notification");
+            console.log(this.notificationCallback);
             if (this.notificationCallback) {
+                console.log("send notification");
 
                 // 查询用户信息
                 const fromPlayer = await client.query(
@@ -512,7 +515,7 @@ class RoomServices {
                 const event = new TransferEvent(transferId, fromPlayerName, toPlayerName, points, description);
                 this.notificationCallback(event);
             }
-
+            console.log("end send notification");
             await client.query('COMMIT');
 
             return {
@@ -697,7 +700,7 @@ class RoomServices {
 
     // 离开游戏
     async leaveGame(gameId, playerId) {
-
+        const client = await this.pool.connect();
         // 查询用户信息
         const playerInfo = await client.query(
             'SELECT username, avatar_url FROM players WHERE player_id = $1',

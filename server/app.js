@@ -368,7 +368,24 @@ app.get('/health', (req, res) => {
 });
 
 app.get('/broadcast', (req, res) => {
-  
+  try {
+    const message = {
+      type: 'test',
+      data: 'Test broadcast message',
+      timestamp: new Date().toISOString()
+    };
+
+    wsInstance.getWss().clients.forEach(client => {
+      if (client.readyState === 1) { // WebSocket.OPEN
+        client.send(JSON.stringify(message));
+      }
+    });
+
+    res.json({ success: true, message: 'Broadcast sent' });
+  } catch (error) {
+    console.error('广播消息失败:', error);
+    res.status(500).json({ error: '广播失败' });
+  }
 });
 
 // SSE连接端点
