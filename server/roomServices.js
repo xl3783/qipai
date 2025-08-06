@@ -272,58 +272,67 @@ class RoomServices {
 
         // 检查玩家是否已经参与该游戏
         const participantCheck = await client.query(
-            'SELECT 1 FROM game_participants WHERE game_id = $1 AND player_id = $2',
+            'SELECT * FROM game_participants WHERE game_id = $1 AND player_id = $2',
             [gameId, playerId]
         );
-
-        if (participantCheck.rows.length > 0) {
+        let participant = null;
+        if (participantCheck.rows.length === 0) {
             if (participantCheck.rows[0].status === 'active') {
                 throw new Error(`Player ${playerId} is already participating in game ${gameId}`);
             }
-        }
 
-        // 检查游戏是否已满
-        const currentPlayersResult = await client.query(
-            'SELECT COUNT(*) as count FROM game_participants WHERE game_id = $1 AND status = $2',
-            [gameId, 'active']
-        );
+            // 检查游戏是否已满
+            const currentPlayersResult = await client.query(
+                'SELECT COUNT(*) as count FROM game_participants WHERE game_id = $1 AND status = $2',
+                [gameId, 'active']
+            );
 
-        const maxPlayersResult = await client.query(
-            'SELECT max_players FROM games WHERE game_id = $1',
-            [gameId]
-        );
+            const maxPlayersResult = await client.query(
+                'SELECT max_players FROM games WHERE game_id = $1',
+                [gameId]
+            );
 
-        const currentPlayers = parseInt(currentPlayersResult.rows[0].count);
-        const maxPlayers = maxPlayersResult.rows[0].max_players;
+            const currentPlayers = parseInt(currentPlayersResult.rows[0].count);
+            const maxPlayers = maxPlayersResult.rows[0].max_players;
 
-        if (currentPlayers >= maxPlayers) {
-            throw new Error(`Game ${gameId} is full (max players: ${maxPlayers})`);
-        }
+            if (currentPlayers >= maxPlayers) {
+                throw new Error(`Game ${gameId} is full (max players: ${maxPlayers})`);
+            }
 
 
-        // 重置为0（游戏开始时）
-        let currentScore = 0;
+            // 重置为0（游戏开始时）
+            let currentScore = 0;
 
-        if (participantCheck.rows.length > 0) {
-            await client.query(`
-          UPDATE game_participants SET status = $1::participant_status WHERE game_id = $2 AND player_id = $3
-        `, ['active', gameId, playerId]);
-            return {
-                participationId: participantCheck.rows[0].participation_id,
-                gameId: gameId,
-                gameName: gameName,
-                playerId: playerId,
-                position: position,
-                currentScore: currentScore
+            if (participantCheck.rows.length > 0) {
+                await client.query(`
+            UPDATE game_participants SET status = $1::participant_status WHERE game_id = $2 AND player_id = $3
+            `, ['active', gameId, playerId]);
+                return {
+                    participationId: participantCheck.rows[0].participation_id,
+                    gameId: gameId,
+                    gameName: gameName,
+                    playerId: playerId,
+                    position: position,
+                    currentScore: currentScore
+                }
+            }
+
+            // 记录参与者
+            const participationResult = await client.query(`
+            INSERT INTO game_participants (game_id, player_id, initial_score, final_score, position)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING participation_id
+        `, [gameId, playerId, currentScore, currentScore, position]);
+                participant = participationResult.rows[0];
+        } else {
+            participant = participantCheck.rows[0];
+            if (participant.status !== 'active') {
+                await client.query(`
+                UPDATE game_participants SET status = $1 WHERE participation_id = $2
+                `, ['active', participant.participation_id]);
             }
         }
-
-        // 记录参与者
-        const participationResult = await client.query(`
-        INSERT INTO game_participants (game_id, player_id, initial_score, final_score, position)
-        VALUES ($1, $2, $3, $4, $5)
-        RETURNING participation_id
-      `, [gameId, playerId, currentScore, currentScore, position]);
+        
 
         // 查询用户信息
         const playerInfo = await client.query(
@@ -334,18 +343,18 @@ class RoomServices {
         const avatarUrl = playerInfo.rows[0].avatar_url;
 
         if (this.notificationCallback) {
-            const event = new JoinEvent(playerId, gameId, playerId, username, position, avatarUrl);
+            const event = new JoinEvent(playerId, gameId, playerId, username, position, avatarUrl, participant.final_score);
             this.notificationCallback(event);
         }
 
 
         return {
-            participationId: participationResult.rows[0].participation_id,
+            participationId: participant.participation_id,
             gameId: gameId,
             gameName: gameName,
             playerId: playerId,
             position: position,
-            currentScore: currentScore
+            currentScore: participant.final_score
         };
     }
 
@@ -512,7 +521,7 @@ class RoomServices {
                 const fromPlayerName = fromPlayer.rows[0].username;
                 const toPlayerName = toPlayer.rows[0].username;
 
-                const event = new TransferEvent(transferId, fromPlayerName, toPlayerName, points, description);
+                const event = new TransferEvent(transferId, fromPlayerId, fromPlayerName, toPlayerId, toPlayerName, points, description);
                 this.notificationCallback(event);
             }
             console.log("end send notification");
@@ -549,9 +558,10 @@ class RoomServices {
         if (toScoreResult.rows.length > 0) {
             toFinalScore = toScoreResult.rows[0].final_score;
         }
-
-        const fromNewFinalScore = fromFinalScore - points;
-        const toNewFinalScore = toFinalScore + points;
+        
+        // 转换为number
+        const fromNewFinalScore = Number(fromFinalScore) - Number(points);
+        const toNewFinalScore = Number(toFinalScore) + Number(points);
 
         await client.query(`
         UPDATE game_participants
@@ -990,7 +1000,7 @@ class RoomServices {
     async getRoomDetail(gameId) {
         // 查询游戏参与者
         const participants = await this.dbService.query(`
-            SELECT gp.final_score, gp.position, p.username, p.avatar_url
+            SELECT gp.*, p.username, p.avatar_url
             FROM game_participants gp
             left join players p on gp.player_id = p.player_id
             WHERE game_id = $1
@@ -1002,8 +1012,10 @@ class RoomServices {
             left join players p on tr.from_player_id = p.player_id
             left join players p2 on tr.to_player_id = p2.player_id
             WHERE tr.game_id = $1
+            ORDER BY tr.created_at DESC
         `, [gameId]);
 
+        // 将当前用户放在第一个
         const roommates = participants.rows.map(participant => ({
             name: participant.username,
             avatar: participant.avatar_url,
@@ -1013,9 +1025,11 @@ class RoomServices {
 
         const transactions = transferRecords.rows.map(transferRecord => ({
             id: transferRecord.transfer_id,
-            from: transferRecord.from_player_name,
-            to: transferRecord.to_player_name,
-            amount: transferRecord.amount,
+            from: transferRecord.from_player_id,
+            fromName: transferRecord.from_player_name,
+            to: transferRecord.to_player_id,
+            toName: transferRecord.to_player_name,
+            amount: transferRecord.points,
             type: "transfer"
         }));
 

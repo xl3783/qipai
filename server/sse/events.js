@@ -1,14 +1,14 @@
 const SSEEvent = require('./sse_event');
 
 class TransferEvent extends SSEEvent {
-    constructor(id, from, to, amount, description) {
-      super('transfer', { id, from, to, amount, description }, );
+    constructor(id, from, fromName, to, toName, amount, description) {
+      super('transfer', { id, from, fromName, to, toName, amount, description }, );
     }
 }
 
 class JoinEvent extends SSEEvent {
-    constructor(id, roomId, userId, username, position, userAvatar) {
-        super('join', { id, roomId, userId, username, position, userAvatar });
+    constructor(id, roomId, userId, username, position, userAvatar, amount) {
+        super('join', { id, roomId, userId, username, position, userAvatar, amount });
     }
 }
 

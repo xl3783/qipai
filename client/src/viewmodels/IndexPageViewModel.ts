@@ -131,6 +131,8 @@ export class IndexPageViewModel {
     // this.setState(prev => ({ ...prev, showQRModal: true }));
     const joinRoomResponse = await RoomService.joinRoom(roomName);
     if (joinRoomResponse.success) {
+      console.log("joinRoomResponse", joinRoomResponse);
+      console.log("roomName", roomName);
       Taro.navigateTo({
         url: `/pages/room/room?roomName=${roomName}&roomId=${joinRoomResponse.gameId}`,
       });

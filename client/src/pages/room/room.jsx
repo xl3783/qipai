@@ -20,6 +20,10 @@ export default function Room() {
   const roomId = router.params.roomId
   const roomName = router.params.roomName
 
+  const currentUserId = Taro.getStorageSync('userInfo').playerId
+  // const currentUserId = "123"
+  console.log("currentUserId", currentUserId);
+
   // restClient.post("/api/games/join", {
   //   gameId: roomId,
   //   playerId: playerId,
@@ -85,8 +89,14 @@ export default function Room() {
 
   const [loading, setLoading] = useState(false)
 
-  const [showTransferModal, setShowTransferModal] = useState(false)
-  const [transferAmount, setTransferAmount] = useState(0)
+  // const [showTransferModal, setShowTransferModal] = useState(false)
+  // const [transferAmount, setTransferAmount] = useState(0)
+  // const [transferTo, setTransferTo] = useState(null)
+  const [transferInfo, setTransferInfo] = useState({
+    show: false,
+    amount: 0,
+    to: null
+  })
   // const roommates = [
   //   { name: "张三", avatar: "/placeholder.svg?height=60&width=60", balance: 100, id: "zhangsan" },
   //   { name: "李四", avatar: "/placeholder.svg?height=60&width=60", balance: 100, id: "lisi" },
@@ -101,6 +111,7 @@ export default function Room() {
   const [roommates, setRoommates] = useState([])
   const [transactions, setTransactions] = useState([])
 
+
   // 获取房间详情
   const getRoomDetail = useCallback(async () => {
     setLoading(true)
@@ -109,7 +120,17 @@ export default function Room() {
         gameId: roomId,
       });
       console.log(result);
-      setRoommates(result.data.roommates)
+      setRoommates(result.data.roommates
+        .sort((a, b) => {
+          if (a.id === currentUserId) {
+            return -1
+          }
+          if (b.id === currentUserId) {
+            return 1
+          }
+          return 0
+        })
+      )
       setTransactions(result.data.transactions)
     } catch (error) {
       console.error('获取房间详情失败:', error);
@@ -150,7 +171,7 @@ export default function Room() {
       // 显示转账通知
       if (data.type === 'transfer') {
         Taro.showToast({
-          title: `转账成功: ${data.transfer.from} → ${data.transfer.to} ${data.transfer.points}`,
+          title: `转账成功: ${data.transfer.fromName} → ${data.transfer.toName} ${data.transfer.points}`,
           icon: 'success',
           duration: 3000
         });
@@ -166,6 +187,70 @@ export default function Room() {
       socketService.offRoomUpdate();
     };
   }, [roomId, getRoomDetail]);
+
+  // 使用 useCallback 包装转账回调，确保获取最新状态
+  const handleTransferCallback = useCallback((data) => {
+    console.log("onTransfer data", data);
+    // 使用函数式更新确保获取最新状态
+    setRoommates(prevRoommates => {
+      console.log("prevRoommates", prevRoommates);
+      const newRoommates = prevRoommates.map(roommate => {
+        if (roommate.id === data.from) {
+          return { ...roommate, balance: Number(roommate.balance) - Number(data.amount) }
+        }
+        if (roommate.id === data.to) {
+          return { ...roommate, balance: Number(roommate.balance) + Number(data.amount) }
+        }
+        return roommate
+      });
+      console.log("newRoommates", newRoommates);
+      return newRoommates;
+    });
+
+    // 更新transactions, 需要根据id去重, 往数组前面插入
+    setTransactions(prevTransactions => {
+      const newTransactions = [data, ...prevTransactions];
+      console.log("newTransactions", newTransactions);
+      return newTransactions;
+    });
+  }, []);
+
+  const handleLeaveRoomCallback = useCallback((data) => {
+    if (data.userId !== currentUserId) {
+      setRoommates(prevRoommates => {
+        return prevRoommates.filter(roommate => roommate.id !== data.userId)
+      })
+    }
+  }, []);
+
+  const handleJoinRoomCallback = useCallback((data) => {
+    if (data.userId !== currentUserId) {
+      setRoommates(prevRoommates => {
+        if (prevRoommates.find(roommate => roommate.id === data.userId)) {  
+          return prevRoommates
+        }
+        return [...prevRoommates, {
+          id: data.userId,
+          name: data.username,
+          avatar: data.userAvatar,
+          balance: 0
+        }]
+      })
+    }
+  }, []);
+
+  // 注册转账监听器
+  useEffect(() => {
+    socketService.onTransfer(handleTransferCallback);
+    socketService.onLeaveRoom(handleLeaveRoomCallback);
+    socketService.onJoinRoom(handleJoinRoomCallback);
+    return () => {
+      // 清理转账监听器
+      socketService.listeners.delete('transfer');
+      socketService.listeners.delete('leave');
+      socketService.listeners.delete('join');
+    };
+  }, [handleTransferCallback, handleLeaveRoomCallback, handleJoinRoomCallback]);
 
   // 页面卸载时断开WebSocket连接
   useEffect(() => {
@@ -193,27 +278,36 @@ export default function Room() {
   }, [roomId])
 
   // 处理转账
-  const handleTransfer = useCallback(async (fromPlayerId, toPlayerId, amount, description) => {
+  const handleTransfer = useCallback(async (toPlayerId, amount) => {
     try {
       const result = await restClient.post("/api/games/transfer", {
         gameId: roomId,
-        from: fromPlayerId,
         to: toPlayerId,
         points: amount,
-        description: description || '转账'
+        description: '转账'
       });
       
-      console.log('转账成功:', result);
+      console.log('转账结果:', result);
       
       // 关闭转账模态框
-      setShowTransferModal(false);
+      // setShowTransferModal(false);
+      setTransferInfo({ show: false, amount: 0, to: null });
+      if (result.data.success) {
+// 转账成功后，WebSocket会自动更新房间数据
+Taro.showToast({
+  title: '转账成功',
+  icon: 'success',
+  duration: 2000
+});
+      } else {
+        Taro.showToast({
+          title: '转账失败',
+          icon: 'error',
+          duration: 2000
+        });
+      }
       
-      // 转账成功后，WebSocket会自动更新房间数据
-      Taro.showToast({
-        title: '转账成功',
-        icon: 'success',
-        duration: 2000
-      });
+      
     } catch (error) {
       console.error('转账失败:', error);
       Taro.showToast({
@@ -223,6 +317,23 @@ export default function Room() {
       });
     }
   }, [roomId]);
+
+  const onAvatarClick = useCallback((roommate) => {
+    console.log("roommate", roommate);
+    console.log("currentUserId", currentUserId);
+    if (roommate.id === currentUserId) {
+      return
+    }
+    setTransferInfo({
+      show: true,
+      amount: 0,
+      to: {
+        id: roommate.id,
+        name: roommate.name,
+        avatar: roommate.avatar
+      }
+    })
+  }, [currentUserId])
 
   if (loading) {
     return (
@@ -240,7 +351,7 @@ export default function Room() {
           <View className="flex items-center gap-3 mb-2">
             <View className="p-2 bg-blue-100 rounded-lg">
               <View className="h-6 w-6 text-blue-600">
-                R
+                房间
               </View>
             </View>
             <View className="text-2xl font-bold text-gray-900">
@@ -257,7 +368,7 @@ export default function Room() {
                 <View
                   key={index}
                   className="flex flex-col items-center p-3 rounded-xl bg-gradient-to-br from-blue-50 to-purple-50 border border-blue-100"
-                  onClick={() => setShowTransferModal(true)}
+                  onClick={() => onAvatarClick(roommate)}
                 >
                   <View className="font-semibold text-gray-900 mb-1 text-sm">{roommate.name}</View>
                   <View className="bg-green-100 text-green-800 font-semibold px-2 py-1 text-xs">
@@ -281,7 +392,7 @@ export default function Room() {
                   <View className="flex items-center gap-3">
                     <View className="ml-1">
                       <View className="font-medium text-gray-900 text-sm">
-                        {transaction.from} → {transaction.to}
+                        {transaction.fromName} → {transaction.toName}
                       </View>
                     </View>
                   </View>
@@ -307,40 +418,28 @@ export default function Room() {
             离开
           </Button>
         </View>
-        
-        {/* 测试按钮 - 开发环境使用 */}
-        {process.env.NODE_ENV === 'development' && (
-          <View className="mt-4">
-            <Button
-              onClick={() => {
-                console.log('测试WebSocket连接...');
-                console.log('当前房间ID:', roomId);
-                console.log('当前用户ID:', Taro.getStorageSync('userId'));
-                console.log('WebSocket连接状态:', socketService.isConnected());
-              }}
-              className="w-full h-10 bg-blue-500 text-white text-sm"
-            >
-              测试WebSocket连接
-            </Button>
-          </View>
-        )}
       </View>
-      
-      {/* 转账模态框 */}
-      <TransferModal
-        isOpen={showTransferModal}
-        onClose={() => setShowTransferModal(false)}
-        players={roommates.map(roommate => ({
-          id: roommate.id,
-          username: roommate.name,
-          avatarUrl: roommate.avatar
-        }))}
-        currentPlayer={{
-          id: socketService.getCurrentUserId() || Taro.getStorageSync('userId'),
-          username: '当前用户'
-        }}
-        onTransfer={handleTransfer}
-      />
+
+        {transferInfo.show && (
+          
+      <ModalDialog
+        isOpen={transferInfo.show}
+        onClose={() => setTransferInfo({ show: false, amount: 0, to: null })}
+      >
+        <View>
+          向 {transferInfo.to.name} 转账: 
+          <Input type="number"
+          focus={true}
+          onInput={(e) => {
+            setTransferInfo({ ...transferInfo, amount: e.detail.value })
+          }}
+           />
+        </View>
+        <View>
+          <Button onClick={() => setTransferInfo({ show: false, amount: 0, to: null })}>取消</Button>
+          <Button onClick={() => handleTransfer(transferInfo.to.id, transferInfo.amount)}>转账</Button>
+        </View>
+      </ModalDialog> )}
     </View>
   )
 } 

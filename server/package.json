@@ -11,7 +11,9 @@
     "test:coverage": "jest --coverage",
     "test:business": "jest business-process.test.js",
     "test:unit": "jest game-services.test.js",
+    "test:create-room": "jest create-room.test.js",
     "test:integration": "jest api-integration.test.js",
+    "test:tmp": "jest tmp.test.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix"
   },
