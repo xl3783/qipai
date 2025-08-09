@@ -1,7 +1,7 @@
 import React, { useEffect } from "react";
 import { View } from "@tarojs/components";
 
-const ModalDialog = ({ isOpen, onClose, title, children }) => {
+const ModalDialog = ({ isOpen, onClose, onConfirm, title, children }) => {
   // 按 ESC 关闭模态框
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -66,7 +66,7 @@ const ModalDialog = ({ isOpen, onClose, title, children }) => {
             取消
           </View>
           <View
-            onClick={onClose}
+            onClick={onConfirm}
             className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition"
           >
             确认

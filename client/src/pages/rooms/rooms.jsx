@@ -20,8 +20,11 @@ export default function Rooms() {
   useEffect(() => {
     const getRooms = async () => {
       const result = await restClient.get("/api/get-rooms");
-      console.log('rooms', result.data);
-      setRooms(result.data);
+      const rooms = result.data.map(room => ({
+        ...room,
+        status: room.status == "playing" ? "进行中" : "已结束"
+      }));
+      setRooms(rooms);
     }
     getRooms();
   }, []);
@@ -108,19 +111,7 @@ export default function Rooms() {
 
         {/* Participants */}
         <View className="flex items-center gap-2">
-          <View className="text-sm text-gray-600">成员:</View>
-          <View className="flex -space-x-2">
-            { room.participants.slice(0, 4).map((participant, index) => (
-              <View key={index} className="h-6 w-6 ring-2 ring-white">
-                <View className="bg-purple-500 text-white text-xs">{participant.charAt(0)}</View>
-              </View>
-            ))}
-            {room.participants.length > 4 && (
-              <View className="h-6 w-6 rounded-full bg-gray-200 ring-2 ring-white flex items-center justify-center">
-                <View className="text-xs text-gray-600">+{room.participants.length - 4}</View>
-              </View>
-            )}
-          </View>
+          <View className="text-sm text-gray-600">成员: {room.participants.join("、")}</View>
         </View>
       </View>
     </View>

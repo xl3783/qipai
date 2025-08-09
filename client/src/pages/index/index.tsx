@@ -152,7 +152,6 @@ export default function Index() {
                     <View className='bg-white rounded-lg p-6 w-80'>
                         <Text className='block text-center text-lg font-semibold mb-4'>加入房间</Text>
                         <View className='text-center flex flex-col gap-4'>
-                            <Text className='text-sm text-muted-foreground'>输入房间号加入房间</Text>
                             <Input type="text" placeholder="请输入房间号"
                                    className="border-2 border-orange-500 rounded-md p-2" value={roomId}
                                    onInput={(e) => {

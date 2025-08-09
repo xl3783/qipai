@@ -342,28 +342,38 @@ Taro.showToast({
       </View>
     )
   }
+  // return (
+  //   <View className="h-screen">
+  //     <View className="flex flex-col bg-blue-500 h-full">
+  //       <View>123</View>
+  //       <View className="flex-grow">
+  //         <View>
+  //           <View>
+  //             <View>123</View>
+  //             <View>123</View>
+  //           </View>
+  //         </View>
+  //       </View>
+  //       <View className="flex-none">
+  //         <Button>01</Button>
+  //       </View>
+  //     </View>
+  //   </View>
+  // )
 
   return (
-    <View className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50"  >
-      <View className="container mx-auto px-4 py-6 max-w-6xl">
+    <View className="h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50"  >
+      <View className="flex flex-col container mx-auto px-4 py-4 max-w-6xl h-full" style={{height: '100vh'}}>
         {/* Header */}
-        <View className="mb-8">
-          <View className="flex items-center gap-3 mb-2">
-            <View className="p-2 bg-blue-100 rounded-lg">
-              <View className="h-6 w-6 text-blue-600">
-                房间
-              </View>
-            </View>
-            <View className="text-2xl font-bold text-gray-900">
-              {roomName}
-            </View>
+        <View className="mb-2">
+          <View className="text-2xl font-bold text-gray-900">
+            房间号：{roomName}
           </View>
           <View className="flex items-center gap-4"></View>
         </View>
         {/* Roommates Section */}
-        <View className="mb-8 shadow-lg border-0 bg-white/80 backdrop-blur-sm">
-          <View>
-            <View className="grid grid-cols-4 gap-4">
+        <View className="rounded-lg p-4 mb-4 shadow-lg border-0 bg-white/80 backdrop-blur-sm">
+        <View className="grid grid-cols-4 gap-4">
               {roommates.map((roommate, index) => (
                 <View
                   key={index}
@@ -377,17 +387,16 @@ Taro.showToast({
                 </View>
               ))}
             </View>
-          </View>
         </View>
         {/* Transaction History */}
-        <View className="mb-8 shadow-lg border-0 bg-white/80 backdrop-blur-sm">
-          <View className="space-y-6">
-            {/* Individual Transactions */}
+        <View className="rounded-lg p-4 mb-4 shadow-lg border-0 bg-white/80 backdrop-blur-sm" style={{flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0}}>
+          <View className="text-lg font-semibold text-gray-900 mb-4">交易记录</View>
+          <View style={{flex: 1, overflowY: 'auto', minHeight: 0}}>
             <View className="space-y-2">
               {transactions.map((transaction, index) => (
                 <View
                   key={index}
-                  className="flex items-center justify-between p-1 rounded-lg bg-gray-50 border border-gray-200 hover:bg-gray-100 transition-colors"
+                  className="flex items-center justify-between p-3 rounded-lg bg-gray-50 border border-gray-200 hover:bg-gray-100 transition-colors"
                 >
                   <View className="flex items-center gap-3">
                     <View className="ml-1">
@@ -407,12 +416,12 @@ Taro.showToast({
         <View className="grid grid-cols-2 gap-4">
           <Button
             onClick={() => Taro.navigateTo({ url: `/pages/settlement/settlement?roomId=${roomId}&roomName=${roomName}` })}
-            className="w-full h-14 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-semibold shadow-lg text-lg"
+            className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-semibold shadow-lg text-lg"
           >
             结算
           </Button>
           <Button
-            className="w-full h-14 border-2 border-gray-200 hover:bg-gray-50 font-semibold bg-transparent"
+            className="w-full border-2 border-gray-200 hover:bg-gray-50 font-semibold bg-transparent"
             onClick={() => leftRoom()}  
           >
             离开
@@ -425,6 +434,7 @@ Taro.showToast({
       <ModalDialog
         isOpen={transferInfo.show}
         onClose={() => setTransferInfo({ show: false, amount: 0, to: null })}
+        onConfirm={() => handleTransfer(transferInfo.to.id, transferInfo.amount)}
       >
         <View>
           向 {transferInfo.to.name} 转账: 
@@ -434,10 +444,6 @@ Taro.showToast({
             setTransferInfo({ ...transferInfo, amount: e.detail.value })
           }}
            />
-        </View>
-        <View>
-          <Button onClick={() => setTransferInfo({ show: false, amount: 0, to: null })}>取消</Button>
-          <Button onClick={() => handleTransfer(transferInfo.to.id, transferInfo.amount)}>转账</Button>
         </View>
       </ModalDialog> )}
     </View>

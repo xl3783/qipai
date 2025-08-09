@@ -475,6 +475,8 @@ class RoomServices {
                     'SELECT 1 FROM game_participants WHERE game_id = $1 AND player_id = $2 AND status = $3',
                     [gameId, toPlayerId, 'active']
                 );
+                console.log(fromPlayerId);
+                console.log(toPlayerId);
 
                 if (fromParticipant.rows.length === 0 || toParticipant.rows.length === 0) {
                     throw new Error('Both players must be active participants in the same game');

@@ -220,7 +220,7 @@ export default function Settlement() {
       const rankingsWithStyle = rankings.data.map((player, index) => {
         return {
           ...player,
-          ...(player.rank === 1 ? rank1Style : rank2Style),
+          ...(player.rank == 1 ? rank1Style : rank2Style),
         }
       })
         setRankings(rankingsWithStyle)
@@ -284,7 +284,7 @@ export default function Settlement() {
                       <View className="font-semibold text-gray-900">{player.name}</View>
                       <View className="flex items-center gap-1">
                         {/* <IconComponent className={`h-4 w-4 ${player.color}`} /> */}
-                        <View className="text-sm text-gray-600">{player.rank === 1 ? "冠军" : "亚军"}</View>
+                        <View className="text-sm text-gray-600">{player.rank == 1 ? "冠军" : ""}</View>
                       </View>
                     </View>
                   </View>
