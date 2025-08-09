@@ -267,9 +267,9 @@ export default function Room() {
       console.log(result);
       
       // 离开WebSocket房间
-      socketService.leaveRoom();
+      // socketService.leaveRoom();
       
-      Taro.navigateTo({
+      Taro.reLaunch({
         url: '/pages/index/index',
       });
     } catch (error) {

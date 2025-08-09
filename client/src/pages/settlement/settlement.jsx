@@ -230,10 +230,10 @@ export default function Settlement() {
   }, [])
 
   const leaveRoom = useCallback(async () => {
-    const result = await restClient.post("/api/games/leave", {
-      gameId: roomId,
-    });
-    Taro.navigateTo({ url: '/pages/index/index' })
+    // const result = await restClient.post("/api/games/leave", {
+    //   gameId: roomId,
+    // });
+    Taro.reLaunch({ url: '/pages/index/index' })
   }, [roomId])
 
 
