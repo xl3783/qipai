@@ -277,9 +277,9 @@ class RoomServices {
         );
         let participant = null;
         if (participantCheck.rows.length === 0) {
-            if (participantCheck.rows[0].status === 'active') {
-                throw new Error(`Player ${playerId} is already participating in game ${gameId}`);
-            }
+            // if (participantCheck.rows[0].status === 'active') {
+            //     throw new Error(`Player ${playerId} is already participating in game ${gameId}`);
+            // }
 
             // 检查游戏是否已满
             const currentPlayersResult = await client.query(
@@ -303,19 +303,19 @@ class RoomServices {
             // 重置为0（游戏开始时）
             let currentScore = 0;
 
-            if (participantCheck.rows.length > 0) {
-                await client.query(`
-            UPDATE game_participants SET status = $1::participant_status WHERE game_id = $2 AND player_id = $3
-            `, ['active', gameId, playerId]);
-                return {
-                    participationId: participantCheck.rows[0].participation_id,
-                    gameId: gameId,
-                    gameName: gameName,
-                    playerId: playerId,
-                    position: position,
-                    currentScore: currentScore
-                }
-            }
+            // if (participantCheck.rows.length > 0) {
+            //     await client.query(`
+            // UPDATE game_participants SET status = $1::participant_status WHERE game_id = $2 AND player_id = $3
+            // `, ['active', gameId, playerId]);
+            //     return {
+            //         participationId: participantCheck.rows[0].participation_id,
+            //         gameId: gameId,
+            //         gameName: gameName,
+            //         playerId: playerId,
+            //         position: position,
+            //         currentScore: currentScore
+            //     }
+            // }
 
             // 记录参与者
             const participationResult = await client.query(`
