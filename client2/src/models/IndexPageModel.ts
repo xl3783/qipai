@@ -1,6 +1,7 @@
 import Taro from "@tarojs/taro";
 import { restClient } from "../services/restClient.js";
-import { LoginResponse, UserInfo, WechatUserInfo } from "../types/index";
+import { LoginResponse, PlayerProfile, UserInfo, WechatUserInfo } from "../types/index";
+import { apiConfig } from "../config/api";
 
 export class IndexPageModel {
   /**
@@ -14,13 +15,13 @@ export class IndexPageModel {
 
       // 调用登录API
       const response = await Taro.request({
-        url: "http://localhost:3000/api/wechat-login",
+        url: `${apiConfig.baseURL}/api/wechat-login`,
         method: "POST",
         data: { code: res.code },
       });
 
       const loginResponse = response.data as LoginResponse;
-      Taro.setStorageSync("token", loginResponse.token);
+      console.log("loginResponse", loginResponse);
       // 将 LoginUser 转换为 UserInfo 格式存储
       const userInfo: UserInfo = {
         username: loginResponse.user.nickname,
@@ -29,6 +30,7 @@ export class IndexPageModel {
       };
       console.log("userInfo", userInfo);
       Taro.setStorageSync("userInfo", userInfo);
+      Taro.setStorageSync("token", loginResponse.token);
 
       return response.data as LoginResponse;
     } catch (error) {
@@ -40,10 +42,10 @@ export class IndexPageModel {
   /**
    * 获取用户档案
    */
-  async getUserProfile(): Promise<UserInfo> {
+  async getUserProfile(): Promise<PlayerProfile> {
     try {
       const response = await restClient.get("/api/players/profile");
-      return response.data as UserInfo;
+      return response.data as PlayerProfile;
     } catch (error) {
       console.error("获取用户档案失败:", error);
       throw error;

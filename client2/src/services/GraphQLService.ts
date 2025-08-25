@@ -11,6 +11,7 @@ import {
 import { useQuery, useMutation, useSubscription } from '@apollo/client';
 import { Score } from '../types/database';
 import Taro from '@tarojs/taro';
+import { apiConfig } from '../config/api';
 
 export interface Message {
   id: string;
@@ -50,7 +51,7 @@ export interface SubscriptionData {
 const simpleGraphQLRequest = async (query: string, variables: any = {}) => {
   try {
     const response = await Taro.request({
-      url: 'http://localhost:15000/graphql',
+      url: apiConfig.graphqlURL,
       method: 'POST',
       header: {
         'Content-Type': 'application/json',

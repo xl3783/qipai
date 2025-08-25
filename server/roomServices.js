@@ -1,3 +1,5 @@
+const { JoinEvent, LeaveEvent, TransferEvent } = require('./sse/events');
+
 function snakeToCamel(str) {
     return str.replace(/_([a-z])/g, (_, group) => group.toUpperCase());
   }
@@ -55,14 +57,14 @@ function snakeToCamel(str) {
     
     return value;
   }
-  
 
-
-class GameServices {
-    constructor(dbService) {
+class RoomServices {
+    constructor(dbService, notificationCallback = null) {
         this.dbService = dbService;
         this.pool = dbService.pool;
+        this.notificationCallback = notificationCallback;
     }
+
 
     generateJapaneseMahjongName() {
         // 常见日麻役种
@@ -144,7 +146,12 @@ class GameServices {
             }
 
             await client.query(`
-                UPDATE players SET username = $1, phone = $2, email = $3, avatar_url = $4, updated_at = NOW() WHERE player_id = $5
+                UPDATE players SET 
+                username = COALESCE($1, username), 
+                phone = COALESCE($2, phone), 
+                email = COALESCE($3, email), 
+                avatar_url = COALESCE($4, avatar_url), 
+                updated_at = NOW() WHERE player_id = $5
             `, [username, phone, email, avatarUrl, userId]);
 
             await client.query('COMMIT');
@@ -213,7 +220,7 @@ class GameServices {
         INSERT INTO games (game_type, status, max_players, min_players, game_name)
         VALUES ($1, $2, $3, $4, $5)
         RETURNING game_id
-      `, ['自定义', 'waiting', 30, 2, gameName]);
+      `, ['自定义', 'playing', 30, 2, gameName]);
             const gameId = gameResult.rows[0].game_id;
 
             // 加入游戏
@@ -254,7 +261,7 @@ class GameServices {
         const gameId = gameInfo.game_id;
 
         // 检查游戏状态是否允许加入
-        if (['playing', 'finished', 'cancelled'].includes(gameStatus)) {
+        if (['finished'].includes(gameStatus)) {
             throw new Error(`Game ${gameId} is not accepting new players (status: ${gameStatus})`);
         }
 
@@ -270,82 +277,89 @@ class GameServices {
 
         // 检查玩家是否已经参与该游戏
         const participantCheck = await client.query(
-            'SELECT 1 FROM game_participants WHERE game_id = $1 AND player_id = $2',
+            'SELECT * FROM game_participants WHERE game_id = $1 AND player_id = $2',
             [gameId, playerId]
         );
+        let participant = null;
+        if (participantCheck.rows.length === 0) {
+            // if (participantCheck.rows[0].status === 'active') {
+            //     throw new Error(`Player ${playerId} is already participating in game ${gameId}`);
+            // }
 
-        if (participantCheck.rows.length > 0) {
-            if (participantCheck.rows[0].status === 'active') {
-                throw new Error(`Player ${playerId} is already participating in game ${gameId}`);
+            // 检查游戏是否已满
+            const currentPlayersResult = await client.query(
+                'SELECT COUNT(*) as count FROM game_participants WHERE game_id = $1 AND status = $2',
+                [gameId, 'active']
+            );
+
+            const maxPlayersResult = await client.query(
+                'SELECT max_players FROM games WHERE game_id = $1',
+                [gameId]
+            );
+
+            const currentPlayers = parseInt(currentPlayersResult.rows[0].count);
+            const maxPlayers = maxPlayersResult.rows[0].max_players;
+
+            if (currentPlayers >= maxPlayers) {
+                throw new Error(`Game ${gameId} is full (max players: ${maxPlayers})`);
+            }
+
+
+            // 重置为0（游戏开始时）
+            let currentScore = 0;
+
+            // if (participantCheck.rows.length > 0) {
+            //     await client.query(`
+            // UPDATE game_participants SET status = $1::participant_status WHERE game_id = $2 AND player_id = $3
+            // `, ['active', gameId, playerId]);
+            //     return {
+            //         participationId: participantCheck.rows[0].participation_id,
+            //         gameId: gameId,
+            //         gameName: gameName,
+            //         playerId: playerId,
+            //         position: position,
+            //         currentScore: currentScore
+            //     }
+            // }
+
+            // 记录参与者
+            const participationResult = await client.query(`
+            INSERT INTO game_participants (game_id, player_id, initial_score, final_score, position)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING participation_id
+        `, [gameId, playerId, currentScore, currentScore, position]);
+                participant = participationResult.rows[0];
+        } else {
+            participant = participantCheck.rows[0];
+            if (participant.status !== 'active') {
+                await client.query(`
+                UPDATE game_participants SET status = $1 WHERE participation_id = $2
+                `, ['active', participant.participation_id]);
             }
         }
+        
 
-        // 检查游戏是否已满
-        const currentPlayersResult = await client.query(
-            'SELECT COUNT(*) as count FROM game_participants WHERE game_id = $1 AND status = $2',
-            [gameId, 'active']
+        // 查询用户信息
+        const playerInfo = await client.query(
+            'SELECT username, avatar_url FROM players WHERE player_id = $1',
+            [playerId]
         );
+        const username = playerInfo.rows[0].username;
+        const avatarUrl = playerInfo.rows[0].avatar_url;
 
-        const maxPlayersResult = await client.query(
-            'SELECT max_players FROM games WHERE game_id = $1',
-            [gameId]
-        );
-
-        const currentPlayers = parseInt(currentPlayersResult.rows[0].count);
-        const maxPlayers = maxPlayersResult.rows[0].max_players;
-
-        if (currentPlayers >= maxPlayers) {
-            throw new Error(`Game ${gameId} is full (max players: ${maxPlayers})`);
+        if (this.notificationCallback) {
+            const event = new JoinEvent(playerId, gameId, playerId, username, position, avatarUrl, participant.final_score);
+            this.notificationCallback(event);
         }
 
-        //   // 获取玩家当前积分
-        //   let currentScore = 0;
-        //   const scoreResult = await client.query(
-        //     'SELECT current_total FROM scores WHERE player_id = $1 FOR UPDATE',
-        //     [playerId]
-        //   );
-
-        //   if (scoreResult.rows.length === 0) {
-        //     // 不存在积分则初始化
-        //     await client.query(
-        //       'INSERT INTO scores(player_id, current_total) VALUES ($1, $2)',
-        //       [playerId, 0]
-        //     );
-        //   } else {
-        //     currentScore = scoreResult.rows[0].current_total;
-        //   }
-
-        // 重置为0（游戏开始时）
-        let currentScore = 0;
-
-        if (participantCheck.rows.length > 0) {
-            await client.query(`
-          UPDATE game_participants SET status = $1::participant_status WHERE game_id = $2 AND player_id = $3
-        `, ['active', gameId, playerId]);
-            return {
-                participationId: participantCheck.rows[0].participation_id,
-                gameId: gameId,
-                gameName: gameName,
-                playerId: playerId,
-                position: position,
-                currentScore: currentScore
-            }
-        }
-
-        // 记录参与者
-        const participationResult = await client.query(`
-        INSERT INTO game_participants (game_id, player_id, initial_score, final_score, position)
-        VALUES ($1, $2, $3, $4, $5)
-        RETURNING participation_id
-      `, [gameId, playerId, currentScore, currentScore, position]);
 
         return {
-            participationId: participationResult.rows[0].participation_id,
+            participationId: participant.participation_id,
             gameId: gameId,
             gameName: gameName,
             playerId: playerId,
             position: position,
-            currentScore: currentScore
+            currentScore: participant.final_score
         };
     }
 
@@ -356,6 +370,7 @@ class GameServices {
             await client.query('BEGIN');
 
             const res = await this._joinGame(client, gameName, playerId, position);
+
             console.log(res);
             await client.query('COMMIT');
             return res;
@@ -422,7 +437,9 @@ class GameServices {
         RETURNING transaction_id
       `, [playerId, gameId, pointsChange, newTotal, description]);
 
-        return transactionResult.rows[0].transaction_id;
+        const transactionId = transactionResult.rows[0].transaction_id;
+
+        return transactionId;
     }
 
     // 玩家间积分转移
@@ -463,6 +480,8 @@ class GameServices {
                     'SELECT 1 FROM game_participants WHERE game_id = $1 AND player_id = $2 AND status = $3',
                     [gameId, toPlayerId, 'active']
                 );
+                console.log(fromPlayerId);
+                console.log(toPlayerId);
 
                 if (fromParticipant.rows.length === 0 || toParticipant.rows.length === 0) {
                     throw new Error('Both players must be active participants in the same game');
@@ -488,11 +507,36 @@ class GameServices {
         RETURNING transfer_id
       `, [fromPlayerId, toPlayerId, points, gameId, description]);
 
+            const transferId = transferResult.rows[0].transfer_id;
+
+            // 如果有通知回调，发送转移通知
+            console.log("start send notification");
+            console.log(this.notificationCallback);
+            if (this.notificationCallback) {
+                console.log("send notification");
+
+                // 查询用户信息
+                const fromPlayer = await client.query(
+                    'SELECT username FROM players WHERE player_id = $1',
+                    [fromPlayerId]
+                );
+                const toPlayer = await client.query(
+                    'SELECT username FROM players WHERE player_id = $1',
+                    [toPlayerId]
+                );
+
+                const fromPlayerName = fromPlayer.rows[0].username;
+                const toPlayerName = toPlayer.rows[0].username;
+
+                const event = new TransferEvent(transferId, fromPlayerId, fromPlayerName, toPlayerId, toPlayerName, points, description);
+                this.notificationCallback(event);
+            }
+            console.log("end send notification");
             await client.query('COMMIT');
 
             return {
                 success: true,
-                transferId: transferResult.rows[0].transfer_id,
+                transferId: transferId,
                 fromPlayerId: fromPlayerId,
                 toPlayerId: toPlayerId
             };
@@ -521,9 +565,10 @@ class GameServices {
         if (toScoreResult.rows.length > 0) {
             toFinalScore = toScoreResult.rows[0].final_score;
         }
-
-        const fromNewFinalScore = fromFinalScore - points;
-        const toNewFinalScore = toFinalScore + points;
+        
+        // 转换为number
+        const fromNewFinalScore = Number(fromFinalScore) - Number(points);
+        const toNewFinalScore = Number(toFinalScore) + Number(points);
 
         await client.query(`
         UPDATE game_participants
@@ -672,6 +717,19 @@ class GameServices {
 
     // 离开游戏
     async leaveGame(gameId, playerId) {
+        const client = await this.pool.connect();
+        // 查询用户信息
+        const playerInfo = await client.query(
+            'SELECT username, avatar_url FROM players WHERE player_id = $1',
+            [playerId]
+        );
+        const username = playerInfo.rows[0].username;
+
+        if (this.notificationCallback) {
+            const event = new LeaveEvent(playerId, gameId, playerId, username);
+            this.notificationCallback(event);
+        }
+
         return await this.updateParticipantStatus(gameId, playerId, 'left', 'Player left the game');
     }
 
@@ -781,40 +839,225 @@ class GameServices {
         return result.rows; 
     }
 
-    async getGames(userId) {
+    async getRooms(userId) {
+
+        // const [rooms, setRooms] = useState([
+//   {
+//     id: 123,
+//     name: "房间123",
+//     status: "进行中",
+//     host: "张三",
+//     participants: 4,
+//     currentParticipants: ["张三", "李四", "王五", "赵六"],
+//     date: "2024/5/24",
+//     totalAmount: 200,
+//     myBalance: 50,
+//     isActive: true,
+//   },
+//   {
+//     id: 456,
+//     name: "房间456",
+//     status: "进行中",
+//     host: "李四",
+//     participants: 3,
+//     currentParticipants: ["李四", "王五", "赵六"],
+//     date: "2024/5/23",
+//     totalAmount: 150,
+//     myBalance: -25,
+//     isActive: true,
+//   },
+//   {
+//     id: 789,
+//     name: "房间789",
+//     status: "已关闭",
+//     host: "王五",
+//     participants: 4,
+//     currentParticipants: ["张三", "李四", "王五", "赵六"],
+//     date: "2024/5/20",
+//     totalAmount: 300,
+//     myBalance: 75,
+//     isActive: false,
+//     finalRank: 1,
+//   },
+//   {
+//     id: 101,
+//     name: "房间101",
+//     status: "已关闭",
+//     host: "赵六",
+//     participants: 3,
+//     currentParticipants: ["李四", "王五", "赵六"],
+//     date: "2024/5/18",
+//     totalAmount: 180,
+//     myBalance: -30,
+//     isActive: false,
+//     finalRank: 3,
+//   },
+// ])
         const client = await this.pool.connect();
         // 从game_participants 中获取所有游戏id， 然后查询games表， 获取游戏信息
         // 嵌套列表， 每个游戏包含一个参与者列表， 参与者列表包含玩家信息
         try {
-            const result = await client.query(`
-                SELECT g.game_id,
-       g.game_name,
-       g.status,
-       g.created_at,
-       g.updated_at,
-       g.hosted as host_id,
-       h.username as host_name,
-       (SELECT json_agg(json_build_object(
-               'player_id', p.player_id,
-               'username', p.username,
-               'final_score', gp2.final_score,
-               'position', gp2.position
-                        )) FROM game_participants gp2
-                           join players p on gp2.player_id = p.player_id
-        WHERE gp2.game_id = g.game_id) as participants
-FROM games g
-         left JOIN players h ON g.hosted = h.player_id
-WHERE g.game_id IN (
-    SELECT game_id FROM game_participants WHERE player_id = $1
-)
-ORDER BY g.created_at DESC
+
+            const gameIds = await client.query(`
+                SELECT game_id FROM game_participants WHERE player_id = $1
             `, [userId]);
+            console.log(gameIds.rows);
+            const roomIds = [...new Set(gameIds.rows.map(gameId => gameId.game_id))];
+            console.log(roomIds);
+            // 查询所有游戏的参与者
+            const participants = await client.query(`
+                SELECT * FROM game_participants WHERE game_id = ANY($1)
+            `, [roomIds]);
+            console.log('participants', participants.rows);
+            // 转换一个以房间为key的map
+            const roomMap = new Map(roomIds.map(roomId => [roomId, participants.rows.filter(participant => participant.game_id === roomId)]));
+            // 解析出所有游戏者的id,并去重,并查询对应的姓名和头像
+            const playerIds = [...new Set(participants.rows.map(participant => participant.player_id))];
+            const players = await client.query(`
+                SELECT player_id, username, avatar_url FROM players WHERE player_id = ANY($1)
+            `, [playerIds]);
+            console.log(players);
+            // 转换成map 方便后续查询
+            const playerMap = new Map(players.rows.map(player => [player.player_id, player]));
+            
+            // 查询所有房间信息
+            const rooms = await client.query(`
+                SELECT * FROM games WHERE game_id = ANY($1)
+            `, [roomIds]);
+            console.log(rooms);
+            // 组装数据
+            const result = rooms.rows.map(room => {
+                console.log('Processing room:', room.game_id);
+                const roomParticipants = roomMap.get(room.game_id) || [];
+                console.log('Room participants:', roomParticipants);
+                console.log('Player map keys:', Array.from(playerMap.keys()));
+                
+                // 确保 roomParticipants 是数组
+                if (!Array.isArray(roomParticipants)) {
+                    console.error('roomParticipants is not an array:', roomParticipants);
+                    return {
+                        id: room.game_id,
+                        name: room.game_name,
+                        status: room.status,
+                        host: 'Unknown',
+                        participants: [],
+                        date: room.created_at,
+                        myBalance: 0,
+                        isActive: room.status === 'playing'
+                    };
+                }
+                
+                // host 暂定第一个参与者
+                const host = roomParticipants[0];
+                const participantNames = roomParticipants.map(participant => {
+                    const player = playerMap.get(participant.player_id);
+                    console.log(`Participant ${participant.player_id}:`, player);
+                    return player ? player.username : 'Unknown';
+                });
+                
+                console.log('Participant names:', participantNames);
+                
+                return {
+                    id: room.game_id,
+                    name: room.game_name,
+                    status: room.status,
+                    host: host && playerMap.get(host.player_id)?.username || 'Unknown',
+                    participants: participantNames,
+                    date: room.created_at,
+                    myBalance: roomParticipants.find(participant => participant.player_id === userId)?.final_score || 0,
+                    isActive: room.status === 'playing'
+                }
+            })
+            console.log(result);
             // 将时间类型转换为时间戳
-            return convertKeysToCamelCase(result.rows);
+            return convertKeysToCamelCase(result);
         } finally {
             client.release();
         }
     }
+
+    async getPlayerProfile(userId) {
+        const result = await this.dbService.query(`
+            SELECT p.player_id, p.username, p.avatar_url, s.current_total as score,
+            s.games_played, s.games_won, s.games_lost
+            FROM players p
+            LEFT JOIN scores s ON p.player_id = s.player_id
+            WHERE p.player_id = $1
+          `, [userId]);
+          
+          if (result.rows.length === 0) {
+            return res.status(404).json({ error: '玩家不存在' });
+          }
+          
+          // 使用 convertKeysToCamelCase 处理时间转换
+          const processedResult = convertKeysToCamelCase(result.rows[0]);
+          // 添加 scoreInfo 字段
+          processedResult.scoreInfo = {
+            playerId: processedResult['playerId'],
+            currentTotal: processedResult['score'],
+            gamesPlayed: processedResult['gamesPlayed'],
+            gamesWon: processedResult['gamesWon'],
+            gamesLost: processedResult['gamesLost'],
+            lastUpdated: new Date().toISOString()
+          };
+          
+          return processedResult;
+    }
+
+    async getRoomDetail(gameId) {
+        // 查询游戏参与者
+        const participants = await this.dbService.query(`
+            SELECT gp.*, p.username, p.avatar_url
+            FROM game_participants gp
+            left join players p on gp.player_id = p.player_id
+            WHERE game_id = $1
+        `, [gameId]);
+
+        const transferRecords = await this.dbService.query(`
+            SELECT tr.*, p.username as from_player_name, p2.username as to_player_name
+            FROM transfer_records tr
+            left join players p on tr.from_player_id = p.player_id
+            left join players p2 on tr.to_player_id = p2.player_id
+            WHERE tr.game_id = $1
+            ORDER BY tr.created_at DESC
+        `, [gameId]);
+
+        // 将当前用户放在第一个
+        const roommates = participants.rows.map(participant => ({
+            name: participant.username,
+            avatar: participant.avatar_url,
+            balance: participant.final_score,
+            id: participant.player_id
+        }));
+
+        const transactions = transferRecords.rows.map(transferRecord => ({
+            id: transferRecord.transfer_id,
+            from: transferRecord.from_player_id,
+            fromName: transferRecord.from_player_name,
+            to: transferRecord.to_player_id,
+            toName: transferRecord.to_player_name,
+            amount: transferRecord.points,
+            type: "transfer"
+        }));
+
+        return {
+            roommates: roommates,
+            transactions: transactions
+        };
+    }
+
+    async getRankings(gameId) {
+        console.log('getRankings', gameId);
+        const result = await this.pool.query(`
+            SELECT p.username as name, gp.final_score as amount, row_number() OVER (ORDER BY gp.final_score DESC) AS rank
+            FROM game_participants gp
+            left join players p on gp.player_id = p.player_id
+            WHERE gp.game_id = $1
+            ORDER BY gp.final_score DESC
+        `, [gameId]);
+        console.log('result', result.rows);
+        return convertKeysToCamelCase(result.rows);
+    }
 }
 
-module.exports = { GameServices, convertKeysToCamelCase }; 
+module.exports = { RoomServices: RoomServices, convertKeysToCamelCase };

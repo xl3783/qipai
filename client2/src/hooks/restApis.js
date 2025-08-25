@@ -38,7 +38,7 @@ const useLogin = () => {
             setHasAttemptedLogin(true)
             
             console.log('开始登录，code:', code)
-            const response = await restClient.post("http://localhost:3000/api/wechat-login", { code })
+            const response = await restClient.post("/api/wechat-login", { code })
             
             setLoginData(response.data)
             console.log('登录成功:', response.data)

@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { graphqlClient, QUERIES, MUTATIONS } from '../graphql/client.js';
 import Taro from '@tarojs/taro';
+import { apiConfig } from '../config/api';
 
 const graphqlQuery = async (query, variables) => {
   console.log('graphqlQuery', query, variables);
   const res = await Taro.request({
     // url: "http://47.113.229.69:5000/graphql",
-    url: "http://localhost:15000/graphql",
+    url: apiConfig.graphqlURL,
     method: "POST",
     header: {
       "Content-Type": "application/json",

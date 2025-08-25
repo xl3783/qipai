@@ -1,0 +1,35 @@
+.user-auth-container {
+    padding: 30px;
+    /*display: flex;*/
+    justify-content: center;
+}
+
+.auth-button {
+    width: 80%;
+    border-radius: 8px;
+}
+
+.user-info-preview {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px 0;
+}
+
+.user-avatar {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    margin-bottom: 15px;
+}
+
+.user-nickname {
+    font-size: 18px;
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+
+.tip-text {
+    font-size: 14px;
+    color: #888;
+}

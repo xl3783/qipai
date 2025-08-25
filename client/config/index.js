@@ -1,4 +1,5 @@
 import { defineConfig } from '@tarojs/cli'
+const { UnifiedWebpackPluginV5 } = require('weapp-tailwindcss/webpack')
 
 import devConfig from './dev'
 import prodConfig from './prod'
@@ -6,8 +7,8 @@ import prodConfig from './prod'
 // https://taro-docs.jd.com/docs/next/config#defineconfig-辅助函数
 export default defineConfig(async (merge, { command, mode }) => {
   const baseConfig = {
-    projectName: 'client',
-    date: '2025-7-21',
+    projectName: 'game-accounting',
+    date: '2025-6-21',
     designWidth: 750,
     deviceRatio: {
       640: 2.34 / 2,
@@ -27,8 +28,40 @@ export default defineConfig(async (merge, { command, mode }) => {
       }
     },
     framework: 'react',
-    compiler: 'vite',
+    compiler: 'webpack5',
+    cache: {
+      enable: false // Webpack 持久化缓存配置，建议开启。默认配置请参考：https://docs.taro.zone/docs/config-detail#cache
+    },
     mini: {
+      // 开启 webpack5 的持久化缓存
+      webpackChain(chain) {
+        chain.merge({
+          module: {
+            rules: [
+              {
+                test: /\.m?js$/,
+                resolve: {
+                  fullySpecified: false
+                }
+              }
+            ]
+          }
+        })
+        // 添加 weapp-tailwindcss 插件
+        chain.merge({
+          plugin: {
+            install: {
+              plugin: UnifiedWebpackPluginV5,
+              args: [{
+                appType: 'taro',
+                // 下面个配置，会开启 rem -> rpx 的转化
+                rem2rpx: true
+              }]
+            }
+          }
+        })
+      },
+      // 开启 webpack5 的持久化缓存
       postcss: {
         pxtransform: {
           enable: true,
@@ -36,60 +69,93 @@ export default defineConfig(async (merge, { command, mode }) => {
 
           }
         },
+        url: {
+          enable: true,
+          config: {
+            limit: 1024 // 设定转换尺寸上限
+          }
+        },
         cssModules: {
-          enable: false, // 默认值
+          enable: false, // 如果需要 cssModules 功能，请设置为 true
           config: {
             namingPattern: 'module',
             generateScopedName: '[name]__[local]___[hash:base64:5]'
           }
-        },
-        tailwindcss: {
-          enable: true,
-          config: {}
         }
-      },
+      }
     },
     h5: {
       publicPath: '/',
       staticDirectory: 'static',
-      miniCssExtractPluginOption: {
-        ignoreOrder: true,
-        filename: 'css/[name].[hash].css',
-        chunkFilename: 'css/[name].[chunkhash].css'
+      // 开启 webpack5 的持久化缓存
+      webpackChain(chain) {
+        chain.merge({
+          module: {
+            rules: [
+              {
+                test: /\.m?js$/,
+                resolve: {
+                  fullySpecified: false
+                }
+              }
+            ]
+          }
+        })
       },
       postcss: {
         autoprefixer: {
           enable: true,
-          config: {}
+          config: {
+
+          }
         },
         cssModules: {
-          enable: false, // 默认值
+          enable: false, // 如果需要 cssModules 功能，请设置为 true
           config: {
             namingPattern: 'module',
             generateScopedName: '[name]__[local]___[hash:base64:5]'
           }
-        },
-        tailwindcss: {
-          enable: true,
-          config: {}
-        }
-      }
-    },
-    rn: {
-      appName: 'taroDemo',
-      postcss: {
-        cssModules: {
-          enable: false, // 默认为 false，如需使用 css modules 功能，则设为 true
         }
       }
     }
   }
 
-
   if (process.env.NODE_ENV === 'development') {
-    // 本地开发构建配置（不混淆压缩）
     return merge({}, baseConfig, devConfig)
+  } else {
+    return merge({}, baseConfig, prodConfig, {
+      mini: {
+        webpackChain(chain) {
+          chain.merge({
+            module: {
+              rules: [
+                {
+                  test: /\.m?js$/,
+                  resolve: {
+                    fullySpecified: false
+                  }
+                }
+              ]
+            }
+          })
+        }
+      },
+      h5: {
+        webpackChain(chain) {
+          chain.merge({
+            module: {
+              rules: [
+                {
+                  test: /\.m?js$/,
+                  resolve: {
+                    fullySpecified: false
+                  }
+                }
+              ]
+            }
+          })
+        }
+      }
+    })
   }
-  // 生产构建配置（默认开启压缩混淆等）
-  return merge({}, baseConfig, prodConfig)
 })

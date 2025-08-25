@@ -5,6 +5,7 @@ import {
   Transaction, 
   CreateTransactionInput 
 } from '../types/index';
+import { apiConfig } from '../config/api';
 
 export class RoomModel {
   private roomId: string;
@@ -37,7 +38,7 @@ export class RoomModel {
 
     try {
       const response = await Taro.request({
-        url: 'http://localhost:15000/graphql',
+        url: apiConfig.graphqlURL,
         method: 'POST',
         header: {
           'Content-Type': 'application/json',
@@ -88,7 +89,7 @@ export class RoomModel {
 
     try {
       const response = await Taro.request({
-        url: 'http://localhost:15000/graphql',
+        url: apiConfig.graphqlURL,
         method: 'POST',
         header: {
           'Content-Type': 'application/json',
@@ -122,7 +123,7 @@ export class RoomModel {
     }
 
     const response = await Taro.request({
-      url: 'http://localhost:3000/api/games/transfer',
+      url: `${apiConfig.baseURL}/api/games/transfer`,
       method: 'POST',
       header: {
         'Content-Type': 'application/json',
@@ -162,7 +163,7 @@ export class RoomModel {
 
     try {
       const response = await Taro.request({
-        url: 'http://localhost:15000/graphql',
+        url: apiConfig.graphqlURL,
         method: 'POST',
         header: {
           'Content-Type': 'application/json',

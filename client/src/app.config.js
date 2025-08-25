@@ -1,20 +1,15 @@
-
-export default defineAppConfig({
+export default {
   pages: [
-    'pages/transfer/index',
-    'pages/settlement/index',
-    'pages/battle-records/index',
-    'pages/room/index',
-    'pages/profile/index',
-    // 'pages/index/index',
-    // 'pages/battle-records/index',
-    // 'pages/settlement/index',
-    // 'pages/transfer/index'
+    'pages/index/index',
+    'pages/room/room',
+    'pages/rooms/rooms',
+    'pages/settlement/settlement',
+    'pages/game-history/game-history'
   ],
   window: {
     backgroundTextStyle: 'light',
     navigationBarBackgroundColor: '#fff',
-    navigationBarTitleText: '室友记账',
+    navigationBarTitleText: '打牌记账',
     navigationBarTextStyle: 'black'
-  },
-})
+  }
+};

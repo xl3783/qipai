@@ -7,25 +7,25 @@
 ## 迁移的函数列表
 
 ### 1. 用户认证相关
-- `app_public.login_with_wechat()` → `GameServices.loginWithWechat()`
+- `app_public.login_with_wechat()` → `RoomServices.loginWithWechat()`
 
 ### 2. 游戏管理相关
-- `create_game_room()` → `GameServices.createGameRoom()`
-- `join_game()` → `GameServices.joinGame()`
-- `end_game()` → `GameServices.endGame()`
-- `update_participant_status()` → `GameServices.updateParticipantStatus()`
-- `leave_game()` → `GameServices.leaveGame()`
-- `kick_player()` → `GameServices.kickPlayer()`
-- `rejoin_game()` → `GameServices.rejoinGame()`
+- `create_game_room()` → `RoomServices.createGameRoom()`
+- `join_game()` → `RoomServices.joinGame()`
+- `end_game()` → `RoomServices.endGame()`
+- `update_participant_status()` → `RoomServices.updateParticipantStatus()`
+- `leave_game()` → `RoomServices.leaveGame()`
+- `kick_player()` → `RoomServices.kickPlayer()`
+- `rejoin_game()` → `RoomServices.rejoinGame()`
 
 ### 3. 积分管理相关
-- `update_player_score()` → `GameServices.updatePlayerScore()`
-- `transfer_points_between_players()` → `GameServices.transferPointsBetweenPlayers()`
+- `update_player_score()` → `RoomServices.updatePlayerScore()`
+- `transfer_points_between_players()` → `RoomServices.transferPointsBetweenPlayers()`
 
 ### 4. 查询相关
-- 游戏信息查询 → `GameServices.getGameInfo()`
-- 积分历史查询 → `GameServices.getScoreHistory()`
-- 排行榜查询 → `GameServices.getLeaderboard()`
+- 游戏信息查询 → `RoomServices.getGameInfo()`
+- 积分历史查询 → `RoomServices.getScoreHistory()`
+- 排行榜查询 → `RoomServices.getLeaderboard()`
 
 ## 新增的API端点
 
@@ -41,7 +41,7 @@
 ```
 server/
 ├── app.js              # 主应用文件（已更新）
-├── gameServices.js     # 游戏服务类（新增）
+├── roomServices.js     # 游戏服务类（新增）
 ├── test_migration.js   # 迁移测试文件（新增）
 └── MIGRATION_README.md # 本文件
 ```

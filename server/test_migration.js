@@ -1,5 +1,5 @@
 const { Pool } = require('pg');
-const GameServices = require('./gameServices');
+const GameServices = require('./roomServices');
 require('dotenv').config();
 
 // 数据库连接配置

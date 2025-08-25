@@ -58,7 +58,7 @@ ORDER BY g.created_at DESC
       console.log('updated_at instanceof Date:', row.updated_at instanceof Date);
       
       // 测试转换
-      const { convertKeysToCamelCase } = require('./gameServices');
+      const { convertKeysToCamelCase } = require('./roomServices');
       const converted = convertKeysToCamelCase(row);
       console.log('\n转换后:');
       console.log(JSON.stringify(converted, null, 2));
