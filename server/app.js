@@ -16,6 +16,7 @@ require('dotenv').config();
 // 创建Express应用
 const app = express();
 const PORT = process.env.PORT || 3000;
+const isdev = process.env.NODE_ENV == 'development'
 
 // 初始化express-ws
 const wsInstance = expressWs(app);
@@ -446,24 +447,26 @@ app.post('/api/wechat-login', async (req, res) => {
       return res.status(400).json({ error: '缺少微信授权码' });
     }
 
-    // mock data
-    // const wechatRes = {
-    //   data: {
-    //     openid: code,
-    //     session_key: code
-    //   }
-    // };
     // console.log(wechatRes);
-
-    // 1. 用code换取openid
-    const wechatRes = await axios.get('https://api.weixin.qq.com/sns/jscode2session', {
-      params: {
-        appid: process.env.WX_APPID,
-        secret: process.env.WX_SECRET,
-        js_code: code,
-        grant_type: 'authorization_code'
-      }
-    });
+    let wechatRes = null;
+    if (isdev) {
+      // mock data
+      wechatRes = {
+        data: {
+          openid: code,
+          session_key: code
+        }
+      };
+    } else {
+      wechatRes = await axios.get('https://api.weixin.qq.com/sns/jscode2session', {
+        params: {
+          appid: process.env.WX_APPID,
+          secret: process.env.WX_SECRET,
+          js_code: code,
+          grant_type: 'authorization_code'
+        }
+      });
+    }
 
     if (wechatRes.data.errcode) {
       return res.status(400).json({ error: `微信API错误: ${wechatRes.data.errmsg}` });
