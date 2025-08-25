@@ -1,4 +1,5 @@
 import Taro from '@tarojs/taro';
+import { apiConfig } from '../config/api'
 
 class SocketService {
   constructor() {
@@ -12,20 +13,21 @@ class SocketService {
   }
 
   // 连接到WebSocket服务器
-  connect(serverUrl = 'http://localhost:3000', token = null) {
+  connect() {
     if (this.socket) {
       Taro.closeSocket();
     }
 
     // 获取token
-    this.token = token || Taro.getStorageSync('token');
+    this.token = Taro.getStorageSync('token');
     if (!this.token) {
       console.error('缺少认证token');
       return null;
     }
 
     // 将HTTP URL转换为WebSocket URL，并添加token参数
-    const wsUrl = serverUrl.replace('http://', 'ws://').replace('https://', 'wss://') + '/ws?token=' + this.token;
+    // const wsUrl = serverUrl.replace('http://', 'ws://').replace('https://', 'wss://') + '/ws?token=' + this.token;
+    const wsUrl = apiConfig.wsURL + '/ws?token=' + this.token;
     
     // 使用Taro的WebSocket API
     Taro.connectSocket({

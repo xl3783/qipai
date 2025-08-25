@@ -50,11 +50,12 @@ export class IndexPageViewModel {
    */
   async doLogin(): Promise<void> {
 
+    console.error("22")
     this.setState(prev => ({ ...prev, isLoggingIn: true }));
-
+    console.error("1")
     // 检查是否已经登录
     const storedUserInfo = Taro.getStorageSync("userInfo");
-    console.log("storedUserInfo", storedUserInfo);
+    console.error("storedUserInfo", storedUserInfo);
     if (!storedUserInfo) {
       // 如果没有登录信息，执行微信登录
       await this.model.wechatLogin();

@@ -16,10 +16,10 @@ export default {
       enable: true,
       config: {
         // 移除 console
-        compress: {
-          drop_console: true,
-          drop_debugger: true
-        }
+        // compress: {
+        //   drop_console: true,
+        //   drop_debugger: true
+        // }
       }
     },
     // 禁用 CSS 压缩以避免 WXSS 编译错误

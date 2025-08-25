@@ -20,9 +20,9 @@ const devConfig: ApiConfig = {
 
 // 生产环境配置
 const prodConfig: ApiConfig = {
-  baseURL: 'http://47.113.229.69:3000',
-  graphqlURL: 'http://47.113.229.69:15000/graphql',
-  wsURL: 'wss://47.113.229.69:4000/subscriptions',
+  baseURL: 'https://score.jzydkj.com',
+  graphqlURL: 'https://score.jzydkj.com/graphql',
+  wsURL: 'wss://score-ws.jzydkj.com/subscriptions',
 };
 
 // 测试环境配置

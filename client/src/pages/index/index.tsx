@@ -1,6 +1,4 @@
-import {View, Button as TaroButton, Input, Button, Text, Image} from "@tarojs/components";
-import PlayerAvatar from "../../components/player-avatar.js";
-// import QRCodeModal from "../../components/qr-code-modal.js";
+import {View, Button as TaroButton, Input, Button, Text} from "@tarojs/components";
 import {useEffect, useState, useCallback} from "react";
 import Taro from "@tarojs/taro";
 import {IndexPageModel} from "../../models/IndexPageModel";
@@ -33,19 +31,8 @@ export default function Index() {
 
     // 初始化
     useEffect(() => {
-        Taro.getUserProfile({
-            desc: '用于完善会员资料', // 声明获取用户个人信息后的用途，后续会展示在弹窗中，请谨慎填写
-            success: (res) => {
-                // 开发者妥善保管用户快速填写的头像昵称，避免重复弹窗
-                console.log(res)
-                // this.setState({
-                //   userInfo: res.userInfo,
-                //   hasUserInfo: true
-                // })
-            }
-        })
         viewModel.initialize();
-    }, []);
+    }, [viewModel]);
 
     // 创建事件处理函数
     const handleGetUserProfile = useCallback(async () => {

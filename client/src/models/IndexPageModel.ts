@@ -42,10 +42,10 @@ export class IndexPageModel {
   /**
    * 获取用户档案
    */
-  async getUserProfile(): Promise<PlayerProfile> {
+  async getUserProfile(): Promise<any> {
     try {
       const response = await restClient.get("/api/players/profile");
-      return response.data as PlayerProfile;
+      return response.data;
     } catch (error) {
       console.error("获取用户档案失败:", error);
       throw error;
