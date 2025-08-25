@@ -101,6 +101,8 @@ export class IndexPageViewModel {
       const wxUserInfo = await this.model.getWechatUserInfo();
       await this.model.setUserInfo(wxUserInfo);
 
+
+
       const userInfo: UserInfo = {
         username: wxUserInfo.nickName,
         avatarUrl: wxUserInfo.avatarUrl,

@@ -146,7 +146,12 @@ class RoomServices {
             }
 
             await client.query(`
-                UPDATE players SET username = $1, phone = $2, email = $3, avatar_url = $4, updated_at = NOW() WHERE player_id = $5
+                UPDATE players SET 
+                username = COALESCE($1, username), 
+                phone = COALESCE($2, phone), 
+                email = COALESCE($3, email), 
+                avatar_url = COALESCE($4, avatar_url), 
+                updated_at = NOW() WHERE player_id = $5
             `, [username, phone, email, avatarUrl, userId]);
 
             await client.query('COMMIT');

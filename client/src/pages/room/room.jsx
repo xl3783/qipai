@@ -1,6 +1,5 @@
 import { View, Button, Input } from '@tarojs/components'
 import Taro from '@tarojs/taro'
-import PlayerAvatar from '../../components/player-avatar.js'
 import PlayerProfileModal from '../../components/player-profile-modal.js'
 import SpendingLimitModal from '../../components/spending-limit-modal.js'
 import TransferModal from '../../components/transfer-modal.js'
@@ -13,6 +12,7 @@ import { Icons } from '../../components/icons.jsx'
 import ModalDialog from '../../components/modal-dialog.jsx'
 import { restClient } from '../../services/restClient.js'
 import socketService from '../../services/socketService.js'
+import { AtAvatar } from 'taro-ui'
 
 export default function Room() {
   // 获取页面参数
@@ -377,10 +377,15 @@ Taro.showToast({
               {roommates.map((roommate, index) => (
                 <View
                   key={index}
-                  className="flex flex-col items-center p-3 rounded-xl bg-gradient-to-br from-blue-50 to-purple-50 border border-blue-100"
+                  className="flex flex-col items-center py-1 rounded-xl bg-gradient-to-br from-blue-50 to-purple-50 border border-blue-100"
                   onClick={() => onAvatarClick(roommate)}
                 >
-                  <View className="font-semibold text-gray-900 mb-1 text-sm">{roommate.name}</View>
+                  {roommate.avatar ?
+                      <AtAvatar image={roommate.avatar} circle={true} size={"small"}></AtAvatar>
+                      :
+                      <AtAvatar text={roommate.name} circle={true} size={"small"}></AtAvatar>
+                  }
+                  <View className="font-semibold text-gray-900 my-1 text-xs">{roommate.name}</View>
                   <View className="bg-green-100 text-green-800 font-semibold px-2 py-1 text-xs">
                     {roommate.balance}
                   </View>

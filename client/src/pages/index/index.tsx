@@ -6,6 +6,7 @@ import Taro from "@tarojs/taro";
 import {IndexPageModel} from "../../models/IndexPageModel";
 import {IndexPageViewModel} from "../../viewmodels/IndexPageViewModel";
 import {IndexPageState, UserInfo} from "../../types/index";
+import UserAuthModal from "../../hooks/user-auth-modal/UserAuthModal";
 
 export default function Index() {
     const [state, setState] = useState<IndexPageState>({
@@ -32,12 +33,24 @@ export default function Index() {
 
     // 初始化
     useEffect(() => {
+        Taro.getUserProfile({
+            desc: '用于完善会员资料', // 声明获取用户个人信息后的用途，后续会展示在弹窗中，请谨慎填写
+            success: (res) => {
+                // 开发者妥善保管用户快速填写的头像昵称，避免重复弹窗
+                console.log(res)
+                // this.setState({
+                //   userInfo: res.userInfo,
+                //   hasUserInfo: true
+                // })
+            }
+        })
         viewModel.initialize();
     }, []);
 
     // 创建事件处理函数
     const handleGetUserProfile = useCallback(async () => {
-        await viewModel.handleGetUserProfile();
+        // await viewModel.handleGetUserProfile();
+
     }, [viewModel]);
 
     const handleCreateRoom = useCallback(() => {
@@ -72,17 +85,8 @@ export default function Index() {
             <View className="container mx-auto px-4 py-8 max-w-md">
                 {/* Profile Section */}
                 <View className="text-center mb-8">
-                    <View className="relative inline-block mb-6">
-                        <PlayerAvatar
-                            name={userInfo?.username || "用户"}
-                            avatar={userInfo?.avatarUrl}
-                            onClick={handleGetUserProfile}
-                            size="lg"
-                        />
-                    </View>
-                    <View className="text-3xl font-bold text-gray-900 mb-2">
-                        {userInfo?.username}
-                    </View>
+                    <UserAuthModal _userInfo={userInfo} handleGetUserProfile={handleGetUserProfile}></UserAuthModal>
+
                     <View className="flex items-center justify-center gap-2 mb-6">
                         <View className="bg-yellow-100 text-yellow-800 px-4 py-2 rounded-full">
                             总积分: {gameStats.totalPoints}
