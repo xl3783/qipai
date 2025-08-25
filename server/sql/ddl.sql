@@ -1,20 +1,3 @@
-create type game_status as enum ('waiting', 'playing', 'finished', 'cancelled');
-
-alter type game_status owner to postgres;
-
-create type participant_status as enum ('active', 'inactive', 'left', 'disconnected', 'kicked');
-
-alter type participant_status owner to postgres;
-
-create type jwt_token as
-(
-    role    text,
-    user_id text,
-    openid  text
-);
-
-alter type jwt_token owner to postgres;
-
 create table players
 (
     player_id  text         not null
@@ -159,7 +142,9 @@ grant delete, insert, select, update on transfer_records to authenticated_user;
 create table scores
 (
     player_id     text                               not null
-        primary key,
+        primary key
+        constraint scores_players_player_id_fk
+            references players,
     current_total integer                  default 0 not null,
     games_played  integer                  default 0,
     games_won     integer                  default 0,
@@ -175,9 +160,4 @@ alter table scores
     owner to postgres;
 
 grant delete, insert, select, update on scores to authenticated_user;
-
-
-alter table scores
-    add constraint scores_players_player_id_fk
-        foreign key (player_id) references players;
 
