@@ -447,23 +447,23 @@ app.post('/api/wechat-login', async (req, res) => {
     }
 
     // mock data
-    const wechatRes = {
-      data: {
-        openid: code,
-        session_key: code
-      }
-    };
-    console.log(wechatRes);
+    // const wechatRes = {
+    //   data: {
+    //     openid: code,
+    //     session_key: code
+    //   }
+    // };
+    // console.log(wechatRes);
 
     // 1. 用code换取openid
-    // const wechatRes = await axios.get('https://api.weixin.qq.com/sns/jscode2session', {
-    //   params: {
-    //     appid: process.env.WX_APPID,
-    //     secret: process.env.WX_SECRET,
-    //     js_code: code,
-    //     grant_type: 'authorization_code'
-    //   }
-    // });
+    const wechatRes = await axios.get('https://api.weixin.qq.com/sns/jscode2session', {
+      params: {
+        appid: process.env.WX_APPID,
+        secret: process.env.WX_SECRET,
+        js_code: code,
+        grant_type: 'authorization_code'
+      }
+    });
 
     if (wechatRes.data.errcode) {
       return res.status(400).json({ error: `微信API错误: ${wechatRes.data.errmsg}` });
