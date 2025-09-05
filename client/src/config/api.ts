@@ -22,7 +22,7 @@ const devConfig: ApiConfig = {
 const prodConfig: ApiConfig = {
   baseURL: 'https://score.jzydkj.com',
   graphqlURL: 'https://score.jzydkj.com/graphql',
-  wsURL: 'wss://score-ws.jzydkj.com/subscriptions',
+  wsURL: 'wss://score.jzydkj.com/subscriptions',
 };
 
 // 测试环境配置
