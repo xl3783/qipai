@@ -11,6 +11,7 @@ const sseManager = require('./sse/sse_manager');
 const SSEEvent = require('./sse/sse_event');
 const { TransferEvent } = require('./sse/events');
 const expressWs = require('express-ws');
+const axios = require("axios");
 require('dotenv').config();
 
 // 创建Express应用
