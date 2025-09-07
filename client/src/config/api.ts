@@ -10,7 +10,7 @@ export interface ApiConfig {
 const devConfig: ApiConfig = {
   baseURL: 'http://localhost:3000',
   graphqlURL: 'http://localhost:15000/graphql',
-  wsURL: 'ws://localhost:4000/subscriptions',
+  wsURL: 'ws://localhost:3000',
 };
 // const devConfig: ApiConfig = {
 //   baseURL: 'https://www.jzydkj.com/app1',
@@ -22,7 +22,7 @@ const devConfig: ApiConfig = {
 const prodConfig: ApiConfig = {
   baseURL: 'https://score.jzydkj.com',
   graphqlURL: 'https://score.jzydkj.com/graphql',
-  wsURL: 'wss://score.jzydkj.com/subscriptions',
+  wsURL: 'wss://score.jzydkj.com',
 };
 
 // 测试环境配置
