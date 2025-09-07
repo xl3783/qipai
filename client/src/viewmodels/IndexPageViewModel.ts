@@ -3,9 +3,7 @@ import { IndexPageModel } from "../models/IndexPageModel";
 import {
   IndexPageState,
   UserInfo,
-  GameStats
 } from "../types/index";
-import { GraphQLService } from "../services/GraphQLService";
 import { RoomService } from "../services/RoomService";
 import { restClient } from "../services/restClient";
 
@@ -50,12 +48,9 @@ export class IndexPageViewModel {
    */
   async doLogin(): Promise<void> {
 
-    console.error("22")
     this.setState(prev => ({ ...prev, isLoggingIn: true }));
-    console.error("1")
-    // 检查是否已经登录
-    const storedUserInfo = Taro.getStorageSync("userInfo");
-    console.error("storedUserInfo", storedUserInfo);
+    // 检查是否已经登录, 先不使用storage进行存储
+    const storedUserInfo = null;
     if (!storedUserInfo) {
       // 如果没有登录信息，执行微信登录
       await this.model.wechatLogin();

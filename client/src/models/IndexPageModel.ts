@@ -1,6 +1,6 @@
 import Taro from "@tarojs/taro";
 import { restClient } from "../services/restClient.js";
-import { LoginResponse, PlayerProfile, UserInfo, WechatUserInfo } from "../types/index";
+import { LoginResponse,  UserInfo, WechatUserInfo } from "../types/index";
 import { apiConfig } from "../config/api";
 
 export class IndexPageModel {
